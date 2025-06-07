@@ -4,7 +4,6 @@ go 1.22.2
 
 require (
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/terraform-exec v0.20.0
 	github.com/hashicorp/terraform-plugin-log v0.9.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.36.1
 )
