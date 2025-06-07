@@ -73,7 +73,7 @@ test: clean stop-firecracker start-firecracker start-socat check-files
 	@echo "Testing the /boot-source endpoint..."
 	@curl -v -X PUT -H "Content-Type: application/json" \
 		-d '{"kernel_image_path":"./test/vmlinux","boot_args":"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw"}' \
-		http://localhost:8080
+		http://localhost:8080/boot-source
 
 # Fix the start-socat target to not recursively call itself
 start-socat:
