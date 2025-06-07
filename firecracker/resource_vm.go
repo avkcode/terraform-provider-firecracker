@@ -181,6 +181,14 @@ func resourceFirecrackerVMCreate(ctx context.Context, d *schema.ResourceData, m 
             "is_read_only":   drive["is_read_only"].(bool),
         }
         
+        // Log the drive configuration for debugging
+        tflog.Debug(ctx, "Drive configuration", map[string]interface{}{
+            "drive_id":       driveMap["drive_id"],
+            "path_on_host":   driveMap["path_on_host"],
+            "is_root_device": driveMap["is_root_device"],
+            "is_read_only":   driveMap["is_read_only"],
+        })
+        
         // Log drive configuration for debugging
         tflog.Debug(ctx, "Configuring drive for VM", map[string]interface{}{
             "drive_id":       driveMap["drive_id"],
