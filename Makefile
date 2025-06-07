@@ -1,3 +1,5 @@
+.DEFAULT_GOAL: help
+
 # Add a check for terraform installation
 check-terraform:
 	@if command -v terraform &> /dev/null; then \
