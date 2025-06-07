@@ -98,8 +98,6 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             apiDriveConfig := map[string]interface{}{
                 "drive_id":       driveID,
                 "path_on_host":   drive["path_on_host"],
-                "is_root_device": drive["is_root_device"],
-                "is_read_only":   drive["is_read_only"],
             }
             
             // Ensure boolean values are properly set
@@ -108,12 +106,18 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 apiDriveConfig["is_root_device"] = rootDeviceStr == "true"
             } else if rootDeviceBool, ok := drive["is_root_device"].(bool); ok {
                 apiDriveConfig["is_root_device"] = rootDeviceBool
+            } else {
+                // Default to false if not specified
+                apiDriveConfig["is_root_device"] = false
             }
             
             if readOnlyStr, ok := drive["is_read_only"].(string); ok {
                 apiDriveConfig["is_read_only"] = readOnlyStr == "true"
             } else if readOnlyBool, ok := drive["is_read_only"].(bool); ok {
                 apiDriveConfig["is_read_only"] = readOnlyBool
+            } else {
+                // Default to false if not specified
+                apiDriveConfig["is_read_only"] = false
             }
             
             // Enhanced debugging for each drive
@@ -127,15 +131,15 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 "api_config":     apiDriveConfig,
             })
             
-            // Ensure the API payload has the correct format for Firecracker
-            finalDriveConfig := map[string]interface{}{
+            // Log the final configuration we're sending to the API
+            tflog.Debug(ctx, "Final drive configuration for API", map[string]interface{}{
                 "drive_id":       driveID,
                 "path_on_host":   apiDriveConfig["path_on_host"],
                 "is_root_device": apiDriveConfig["is_root_device"],
                 "is_read_only":   apiDriveConfig["is_read_only"],
-            }
+            })
             
-            if err := c.putComponent(ctx, driveURL, finalDriveConfig); err != nil {
+            if err := c.putComponent(ctx, driveURL, apiDriveConfig); err != nil {
                 return fmt.Errorf("failed to configure drive %s: %w", driveID, err)
             }
             
