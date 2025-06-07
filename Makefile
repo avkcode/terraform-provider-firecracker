@@ -131,13 +131,20 @@ build: check-deps
 	@cp terraform-provider-firecracker ~/.terraform.d/plugins/registry.terraform.io/hashicorp/firecracker/0.1.0/linux_amd64/
 	@echo "✅ Build complete."
 
-# Add dependency tracking to run target
-run: build check-terraform check-files setup
-	@echo "Running Terraform..."
+# Add a clean-test target to remove problematic files
+clean-test:
+	@echo "Cleaning test directory..."
 	@rm -rf test/.terraform.lock.hcl
-	@rm -f test/remote-exec-template.tf  # Remove this file if it exists
-	@terraform -chdir=test init
-	@terraform -chdir=test apply -auto-approve
+	@rm -f test/remote-exec-template.tf
+	@echo "✅ Test directory cleaned."
+
+# Add dependency tracking to run target
+run: build check-terraform check-files clean-test
+	@echo "Setting up environment..."
+	@$(MAKE) setup || { echo "❌ Environment setup failed"; exit 1; }
+	@echo "Running Terraform..."
+	@terraform -chdir=test init || { echo "❌ Terraform initialization failed"; exit 1; }
+	@terraform -chdir=test apply -auto-approve || { echo "❌ Terraform apply failed"; $(MAKE) status; exit 1; }
 	@echo "✅ Terraform apply completed successfully."
 
 # Fix the test target to not start multiple Firecracker instances
@@ -293,4 +300,4 @@ prepare-ssh-image: check-files
 	@echo ""
 	@echo "⚠️ Note: This is a manual process and requires root privileges."
 
-.PHONY: help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status test-remote-exec setup-network prepare-ssh-image
+.PHONY: help build run test start-socat stop-socat clean clean-test start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status test-remote-exec setup-network prepare-ssh-image
