@@ -7,6 +7,7 @@
 *.dll
 *.so
 *.dylib
+terraform-provider-firecracker
 
 # Test binary, built with `go test -c`
 *.test
@@ -24,3 +25,33 @@ go.work.sum
 # env file
 .env
 .aider*
+
+# Terraform files
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+terraform.tfvars
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+test/.terraform/
+test/.terraformrc
+test/terraform.tfstate
+test/terraform.tfstate.backup
+test/remote-exec/.terraform/
+test/remote-exec/terraform.tfstate
+test/remote-exec/terraform.tfstate.backup
+
+# Test VM files
+test/vmlinux
+test/firecracker-rootfs.ext4
+test/id_rsa
+test/id_rsa.pub
