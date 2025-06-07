@@ -226,7 +226,7 @@ status:
 test-remote-exec: build check-terraform check-files setup
 	@echo "Testing remote-exec provisioner to install Docker..."
 	@mkdir -p test/remote-exec
-	@cp test/remote-exec-template.tf test/remote-exec/main.tf
+	@cp templates/remote-exec-template.tf test/remote-exec/main.tf
 	@echo "✅ Created remote-exec test configuration"
 	@echo "Generating SSH key for remote access..."
 	@mkdir -p test
