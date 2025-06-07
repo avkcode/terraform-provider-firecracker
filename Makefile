@@ -1,3 +1,14 @@
+# Add a check for terraform installation
+check-terraform:
+	@if ! command -v terraform &> /dev/null; then \
+		echo "Error: terraform command not found"; \
+		echo "Please install Terraform first:"; \
+		echo "  1. Visit https://developer.hashicorp.com/terraform/downloads"; \
+		echo "  2. Download and install the appropriate version for your system"; \
+		echo "  3. Ensure terraform is in your PATH"; \
+		exit 1; \
+	fi
+
 # Add a default target that shows available commands
 .PHONY: help
 help:
@@ -22,7 +33,7 @@ build:
 	@echo "Build complete."
 
 # Add dependency tracking to run target
-run: build
+run: build check-terraform
 	@echo "Running Terraform..."
 	@rm -rf test/.terraform.lock.hcl
 	@terraform -chdir=test init
@@ -70,4 +81,4 @@ setup: clean stop-firecracker start-firecracker start-socat
 teardown: stop-socat stop-firecracker clean
 	@echo "Environment has been torn down."
 
-.PHONY: all help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown
+.PHONY: all help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform
