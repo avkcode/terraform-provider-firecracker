@@ -216,12 +216,46 @@ setup:
 	@$(MAKE) stop-socat || true
 	@$(MAKE) clean
 	@$(MAKE) stop-firecracker || true
-	@$(MAKE) start-firecracker
-	@$(MAKE) start-socat
+	@echo "Starting Firecracker..."
+	@if pgrep -f "firecracker --api-sock" > /dev/null; then \
+		echo "⚠️  Firecracker is already running."; \
+	else \
+		rm -f /tmp/firecracker.sock; \
+		firecracker --api-sock /tmp/firecracker.sock & \
+		echo "✅ Firecracker started successfully."; \
+		sleep 2; \
+		if ! [ -S /tmp/firecracker.sock ]; then \
+			echo "❌ Error: Firecracker socket was not created"; \
+			exit 1; \
+		fi; \
+		chmod 666 /tmp/firecracker.sock; \
+		echo "✅ Socket permissions set"; \
+	fi
+	@echo "Starting socat..."
+	@if pgrep -f "socat TCP-LISTEN:8080" > /dev/null; then \
+		echo "⚠️  socat is already running."; \
+	else \
+		socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/tmp/firecracker.sock & \
+		echo "✅ socat started successfully."; \
+		sleep 2; \
+	fi
+	@echo "Verifying API connectivity..."
+	@if ! curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 2>/dev/null | grep -q "200\|400\|404"; then \
+		echo "❌ Error: Cannot connect to Firecracker API"; \
+		echo "Please check that Firecracker and socat are running correctly"; \
+		$(MAKE) status; \
+		exit 1; \
+	else \
+		echo "✅ API connection verified"; \
+	fi
 	@echo "✅ Environment is ready."
 
 # Add a full teardown target
-teardown: stop-socat stop-firecracker clean
+teardown:
+	@echo "Tearing down environment..."
+	@$(MAKE) stop-socat || true
+	@$(MAKE) stop-firecracker || true
+	@$(MAKE) clean
 	@echo "✅ Environment has been torn down."
 
 # Add a status target to check the current state of services
