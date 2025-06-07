@@ -162,7 +162,7 @@ start-socat:
 stop-socat:
 	@echo "Stopping socat..."
 	@if pgrep -f "socat TCP-LISTEN:8080" > /dev/null; then \
-		pkill -f "socat TCP-LISTEN:8080"; \
+		pkill -f "socat TCP-LISTEN:8080" || true; \
 		echo "✅ socat stopped."; \
 	else \
 		echo "⚠️  No socat process found."; \
@@ -189,7 +189,7 @@ start-firecracker:
 stop-firecracker:
 	@echo "Stopping Firecracker..."
 	@if pgrep -f "firecracker --api-sock" > /dev/null; then \
-		pkill -f "firecracker --api-sock"; \
+		pkill -f "firecracker --api-sock" || true; \
 		echo "✅ Firecracker stopped."; \
 	else \
 		echo "⚠️  No Firecracker process found."; \
