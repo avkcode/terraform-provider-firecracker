@@ -45,24 +45,84 @@ func defaultHTTPClient() *http.Client {
     return retryClient.StandardClient()
 }
 
-// CreateVM sends a request to the Firecracker API to create a new microVM.
+// CreateVM creates a new Firecracker VM by configuring its components one by one.
 // It takes a context for cancellation and a configuration map that defines the VM properties.
-// The configuration should include boot-source, drives, machine-config, and other VM settings.
 func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]interface{}) error {
-    url := c.BaseURL + "/vm"
-    tflog.Debug(ctx, "Creating VM", map[string]interface{}{
-        "url":    url,
+    tflog.Debug(ctx, "Creating VM by configuring components", map[string]interface{}{
         "config": config,
     })
 
-    jsonPayload, err := json.Marshal(config)
-    if err != nil {
-        return fmt.Errorf("failed to marshal VM configuration payload: %w", err)
+    // Configure boot source
+    if bootSource, ok := config["boot-source"].(map[string]interface{}); ok {
+        bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
+        if err := c.putComponent(ctx, bootSourceURL, bootSource); err != nil {
+            return fmt.Errorf("failed to configure boot source: %w", err)
+        }
     }
 
-    req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonPayload))
+    // Configure machine config
+    if machineConfig, ok := config["machine-config"].(map[string]interface{}); ok {
+        machineConfigURL := fmt.Sprintf("%s/machine-config", c.BaseURL)
+        if err := c.putComponent(ctx, machineConfigURL, machineConfig); err != nil {
+            return fmt.Errorf("failed to configure machine: %w", err)
+        }
+    }
+
+    // Configure drives
+    if drives, ok := config["drives"].([]interface{}); ok {
+        for _, driveRaw := range drives {
+            drive, ok := driveRaw.(map[string]interface{})
+            if !ok {
+                return fmt.Errorf("invalid drive configuration format")
+            }
+            
+            driveID := drive["drive_id"].(string)
+            driveURL := fmt.Sprintf("%s/drives/%s", c.BaseURL, driveID)
+            if err := c.putComponent(ctx, driveURL, drive); err != nil {
+                return fmt.Errorf("failed to configure drive %s: %w", driveID, err)
+            }
+        }
+    }
+
+    // Configure network interfaces
+    if networkInterfaces, ok := config["network-interfaces"].([]interface{}); ok {
+        for _, ifaceRaw := range networkInterfaces {
+            iface, ok := ifaceRaw.(map[string]interface{})
+            if !ok {
+                return fmt.Errorf("invalid network interface configuration format")
+            }
+            
+            ifaceID := iface["iface_id"].(string)
+            ifaceURL := fmt.Sprintf("%s/network-interfaces/%s", c.BaseURL, ifaceID)
+            if err := c.putComponent(ctx, ifaceURL, iface); err != nil {
+                return fmt.Errorf("failed to configure network interface %s: %w", ifaceID, err)
+            }
+        }
+    }
+
+    // Start the VM
+    actionsURL := fmt.Sprintf("%s/actions", c.BaseURL)
+    startAction := map[string]interface{}{
+        "action_type": "InstanceStart",
+    }
+    if err := c.putComponent(ctx, actionsURL, startAction); err != nil {
+        return fmt.Errorf("failed to start VM: %w", err)
+    }
+
+    tflog.Info(ctx, "VM created and started successfully")
+    return nil
+}
+
+// Helper method to send PUT requests to configure components
+func (c *FirecrackerClient) putComponent(ctx context.Context, url string, payload interface{}) error {
+    jsonPayload, err := json.Marshal(payload)
     if err != nil {
-        return fmt.Errorf("failed to create HTTP request for VM creation: %w", err)
+        return fmt.Errorf("failed to marshal payload: %w", err)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonPayload))
+    if err != nil {
+        return fmt.Errorf("failed to create HTTP request: %w", err)
     }
     req.Header.Set("Content-Type", "application/json")
 
@@ -73,19 +133,15 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
 
     resp, err := client.Do(req)
     if err != nil {
-        return fmt.Errorf("failed to send VM creation request: %w", err)
+        return fmt.Errorf("failed to send request: %w", err)
     }
     defer resp.Body.Close()
 
-    body, _ := io.ReadAll(resp.Body)
-    if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusCreated {
-        return fmt.Errorf("API error when creating VM: status=%d, response=%s", resp.StatusCode, string(body))
+    if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("API error: status=%d, response=%s", resp.StatusCode, string(body))
     }
-    
-    tflog.Info(ctx, "VM created successfully", map[string]interface{}{
-        "status_code": resp.StatusCode,
-    })
-    
+
     return nil
 }
 
