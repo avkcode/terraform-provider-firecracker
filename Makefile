@@ -235,7 +235,7 @@ resource "firecracker_vm" "docker_vm" {
   connection {
     type        = "ssh"
     user        = "root"
-    private_key = file("../id_rsa") 
+    private_key = file("../id_rsa")
     host        = "172.16.0.2"  # Assuming this is the IP of the VM
     timeout     = "2m"
   }
