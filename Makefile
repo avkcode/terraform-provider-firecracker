@@ -90,15 +90,26 @@ check-deps: check-terraform
 		exit 1; \
 	fi
 	
-	@if ! command -v firecracker &> /dev/null; then \
+	@if command -v firecracker &> /dev/null; then \
+		echo "✅ Firecracker found at: $$(which firecracker)"; \
+	elif [ -x /usr/local/bin/firecracker ]; then \
+		echo "✅ Firecracker found at: /usr/local/bin/firecracker"; \
+		echo "⚠️  Warning: Firecracker is not in your PATH. Consider adding /usr/local/bin to your PATH."; \
+		export PATH=$$PATH:/usr/local/bin; \
+	else \
 		echo "❌ Error: firecracker command not found"; \
 		echo "Please install Firecracker first:"; \
 		echo "  Visit https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md"; \
 		exit 1; \
 	fi
-	@echo "✅ Firecracker found at: $$(which firecracker)"
 	
-	@if ! command -v socat &> /dev/null; then \
+	@if command -v socat &> /dev/null; then \
+		echo "✅ socat found at: $$(which socat)"; \
+	elif [ -x /usr/local/bin/socat ]; then \
+		echo "✅ socat found at: /usr/local/bin/socat"; \
+		echo "⚠️  Warning: socat is not in your PATH. Consider adding /usr/local/bin to your PATH."; \
+		export PATH=$$PATH:/usr/local/bin; \
+	else \
 		echo "❌ Error: socat command not found"; \
 		echo "Please install socat first:"; \
 		echo "  For Ubuntu/Debian: sudo apt-get install socat"; \
@@ -106,8 +117,7 @@ check-deps: check-terraform
 		echo "  For macOS: brew install socat"; \
 		exit 1; \
 	fi
-	@echo "✅ socat found at: $$(which socat)"
-	@echo "All dependencies are installed."
+	@echo "✅ All dependencies are installed."
 
 # Fix the build target to create directories if they don't exist
 build: check-deps
