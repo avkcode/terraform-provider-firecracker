@@ -16,7 +16,7 @@ resource "firecracker_vm" "example_vm" {
   }
 
   machine_config {
-    vcpu_count   = 4          # Number of vCPUs
+    vcpu_count   = 2          # Number of vCPUs
     mem_size_mib = 9096       # Memory size in MiB
   }
 
