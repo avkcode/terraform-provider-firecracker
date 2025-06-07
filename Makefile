@@ -235,7 +235,7 @@ resource "firecracker_vm" "docker_vm" {
   connection {
     type        = "ssh"
     user        = "root"
-    private_key = file("../id_rsa")
+    private_key = file("../id_rsa") 
     host        = "172.16.0.2"  # Assuming this is the IP of the VM
     timeout     = "2m"
   }
@@ -260,6 +260,7 @@ resource "firecracker_vm" "docker_vm" {
 EOF
 	@echo "✅ Created remote-exec test configuration"
 	@echo "Generating SSH key for remote access..."
+	@mkdir -p test
 	@if [ ! -f "test/id_rsa" ]; then \
 		ssh-keygen -t rsa -b 2048 -f test/id_rsa -N ""; \
 		echo "✅ SSH key generated"; \
@@ -269,7 +270,7 @@ EOF
 	@echo "To run this test, you need to:"
 	@echo "1. Ensure your Firecracker VM has SSH enabled"
 	@echo "2. Configure networking with the tap0 interface"
-	@echo "3. Add the public key to the VM's authorized_keys"
+	@echo "3. Add the public key to the VM's authorized_keys (use prepare-ssh-image target)"
 	@echo "4. Run: terraform -chdir=test/remote-exec init && terraform -chdir=test/remote-exec apply"
 	@echo ""
 	@echo "Note: This test requires additional setup and is not fully automated."
@@ -314,6 +315,7 @@ prepare-ssh-image: check-files
 	@echo "  chroot /mnt/rootfs apt-get install -y openssh-server"
 	@echo "  mkdir -p /mnt/rootfs/root/.ssh"
 	@echo "  cat test/id_rsa.pub > /mnt/rootfs/root/.ssh/authorized_keys"
+	@echo "  chown -R root:root /mnt/rootfs/root/.ssh"
 	@echo "  chmod 600 /mnt/rootfs/root/.ssh/authorized_keys"
 	@echo "  echo 'PermitRootLogin yes' >> /mnt/rootfs/etc/ssh/sshd_config"
 	@echo "  umount /mnt/rootfs"
