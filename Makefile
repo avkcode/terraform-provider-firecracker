@@ -213,49 +213,53 @@ stop-firecracker:
 # Add a full setup target
 setup:
 	@echo "Setting up environment..."
-	@$(MAKE) stop-socat || true
-	@$(MAKE) clean
-	@$(MAKE) stop-firecracker || true
+	@$(MAKE) teardown || true
 	@echo "Starting Firecracker..."
-	@if pgrep -f "firecracker --api-sock" > /dev/null; then \
-		echo "⚠️  Firecracker is already running."; \
-	else \
-		rm -f /tmp/firecracker.sock; \
-		firecracker --api-sock /tmp/firecracker.sock & \
-		echo "✅ Firecracker started successfully."; \
-		sleep 2; \
-		if ! [ -S /tmp/firecracker.sock ]; then \
-			echo "❌ Error: Firecracker socket was not created"; \
+	@rm -f /tmp/firecracker.sock
+	@firecracker --api-sock /tmp/firecracker.sock &
+	@echo "Waiting for socket to be created..."
+	@for i in {1..10}; do \
+		if [ -S /tmp/firecracker.sock ]; then \
+			echo "✅ Socket created successfully"; \
+			chmod 666 /tmp/firecracker.sock; \
+			break; \
+		fi; \
+		if [ $$i -eq 10 ]; then \
+			echo "❌ Timed out waiting for socket"; \
 			exit 1; \
 		fi; \
-		chmod 666 /tmp/firecracker.sock; \
-		echo "✅ Socket permissions set"; \
-	fi
+		echo "Waiting... ($$i/10)"; \
+		sleep 1; \
+	done
 	@echo "Starting socat..."
-	@if pgrep -f "socat TCP-LISTEN:8080" > /dev/null; then \
-		echo "⚠️  socat is already running."; \
-	else \
-		socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/tmp/firecracker.sock & \
-		echo "✅ socat started successfully."; \
-		sleep 2; \
-	fi
+	@socat TCP-LISTEN:8080,reuseaddr,fork UNIX-CONNECT:/tmp/firecracker.sock &
+	@echo "Waiting for socat to start..."
+	@sleep 2
 	@echo "Verifying API connectivity..."
-	@if ! curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 2>/dev/null | grep -q "200\|400\|404"; then \
-		echo "❌ Error: Cannot connect to Firecracker API"; \
-		echo "Please check that Firecracker and socat are running correctly"; \
-		$(MAKE) status; \
-		exit 1; \
-	else \
-		echo "✅ API connection verified"; \
-	fi
+	@for i in {1..5}; do \
+		if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 2>/dev/null | grep -q "200\|400\|404"; then \
+			echo "✅ API connection verified"; \
+			break; \
+		fi; \
+		if [ $$i -eq 5 ]; then \
+			echo "❌ Failed to connect to API"; \
+			$(MAKE) status; \
+			exit 1; \
+		fi; \
+		echo "Retrying... ($$i/5)"; \
+		sleep 1; \
+	done
 	@echo "✅ Environment is ready."
 
 # Add a full teardown target
 teardown:
 	@echo "Tearing down environment..."
-	@$(MAKE) stop-socat || true
-	@$(MAKE) stop-firecracker || true
-	@$(MAKE) clean
+	@echo "Stopping socat..."
+	@pkill -9 -f "socat TCP-LISTEN:8080" || true
+	@echo "Stopping Firecracker..."
+	@pkill -9 -f "firecracker --api-sock" || true
+	@echo "Cleaning up..."
+	@rm -f /tmp/firecracker.sock
 	@echo "✅ Environment has been torn down."
 
 # Add a status target to check the current state of services
