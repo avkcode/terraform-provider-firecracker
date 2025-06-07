@@ -11,13 +11,15 @@ import (
 )
 
 // FirecrackerClient represents the client for interacting with the Firecracker API.
+// It handles communication with the Firecracker HTTP API for managing microVMs.
 type FirecrackerClient struct {
     BaseURL    string
     HTTPClient httpClient
     Timeout    time.Duration
 }
 
-// Provider defines the Terraform provider for Firecracker.
+// Provider returns a *schema.Provider for Firecracker.
+// It defines the provider's configuration, resources, and data sources.
 func Provider() *schema.Provider {
     p := &schema.Provider{
         Schema: map[string]*schema.Schema{
@@ -46,6 +48,7 @@ func Provider() *schema.Provider {
 }
 
 // configureProvider initializes the FirecrackerClient with the provided configuration.
+// It creates an HTTP client with appropriate timeouts and connection settings.
 func configureProvider(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
     baseURL := d.Get("base_url").(string)
     timeout := d.Get("timeout").(int)

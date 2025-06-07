@@ -1,6 +1,10 @@
 # Terraform Provider for Firecracker
 
-This Terraform provider allows you to manage Firecracker microVMs through Terraform.
+This Terraform provider allows you to manage [Firecracker](https://firecracker-microvm.github.io/) microVMs through Terraform.
+
+## Documentation
+
+Full documentation is available in the [docs](./docs) directory.
 
 ## Requirements
 
@@ -8,22 +12,20 @@ This Terraform provider allows you to manage Firecracker microVMs through Terraf
 - [Go](https://golang.org/doc/install) >= 1.22 (to build the provider plugin)
 - [Firecracker](https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md) running with API access
 
-## Building The Provider
+## Quick Start
 
-1. Clone the repository
+### Installation
+
 ```bash
+# Clone the repository
 git clone https://github.com/avkcode/terraform-provider-firecracker.git
 cd terraform-provider-firecracker
-```
 
-2. Build the provider
-```bash
+# Build and install the provider
 make build
 ```
 
-This will build the provider and install it to your local Terraform plugin directory.
-
-## Using the Provider
+### Configuration
 
 ```hcl
 # Configure the Firecracker provider
@@ -75,6 +77,10 @@ make build
 ```bash
 make test
 ```
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ## License
 

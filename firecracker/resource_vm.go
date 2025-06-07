@@ -16,7 +16,8 @@ import (
     "github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
-// resourceFirecrackerVM defines the schema and lifecycle methods for the firecracker_vm resource.
+// resourceFirecrackerVM defines the schema and CRUD operations for the firecracker_vm resource.
+// This resource allows users to create, read, update, and delete Firecracker microVMs.
 func resourceFirecrackerVM() *schema.Resource {
     return &schema.Resource{
         CreateContext: resourceFirecrackerVMCreate,

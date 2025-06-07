@@ -45,7 +45,9 @@ func defaultHTTPClient() *http.Client {
     return retryClient.StandardClient()
 }
 
-// CreateVM sends a request to create a new Firecracker VM
+// CreateVM sends a request to the Firecracker API to create a new microVM.
+// It takes a context for cancellation and a configuration map that defines the VM properties.
+// The configuration should include boot-source, drives, machine-config, and other VM settings.
 func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]interface{}) error {
     url := c.BaseURL + "/vm"
     tflog.Debug(ctx, "Creating VM", map[string]interface{}{
@@ -179,7 +181,9 @@ func (c *FirecrackerClient) StopVM(ctx context.Context, vmID string) error {
     return nil
 }
 
-// GetVM retrieves information about a VM
+// GetVM retrieves information about a VM from the Firecracker API.
+// It returns a map containing the VM configuration or nil if the VM doesn't exist.
+// This method is used by the Read operation of the resource and data source.
 func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]interface{}, error) {
     url := fmt.Sprintf("%s/vm/%s", c.BaseURL, vmID)
     tflog.Debug(ctx, "Getting VM info", map[string]interface{}{
@@ -220,7 +224,9 @@ func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]
     return result, nil
 }
 
-// DeleteVM sends a request to delete a Firecracker VM
+// DeleteVM sends a request to delete a Firecracker VM.
+// If the VM doesn't exist, it returns nil to indicate successful deletion.
+// This method is used by the Delete operation of the resource.
 func (c *FirecrackerClient) DeleteVM(ctx context.Context, vmID string) error {
     url := fmt.Sprintf("%s/vm/%s", c.BaseURL, vmID)
     tflog.Debug(ctx, "Deleting VM", map[string]interface{}{
@@ -263,7 +269,9 @@ func (c *FirecrackerClient) DeleteVM(ctx context.Context, vmID string) error {
     return nil
 }
 
-// UpdateVM sends a request to update a Firecracker VM
+// UpdateVM sends a request to update a Firecracker VM.
+// It takes a VM ID and a configuration map containing the properties to update.
+// This method is used by the Update operation of the resource.
 func (c *FirecrackerClient) UpdateVM(ctx context.Context, vmID string, config map[string]interface{}) error {
     url := fmt.Sprintf("%s/vm/%s", c.BaseURL, vmID)
     tflog.Debug(ctx, "Updating VM", map[string]interface{}{
