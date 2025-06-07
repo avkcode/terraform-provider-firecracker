@@ -135,6 +135,7 @@ build: check-deps
 run: build check-terraform check-files setup
 	@echo "Running Terraform..."
 	@rm -rf test/.terraform.lock.hcl
+	@rm -f test/remote-exec-template.tf  # Remove this file if it exists
 	@terraform -chdir=test init
 	@terraform -chdir=test apply -auto-approve
 	@echo "✅ Terraform apply completed successfully."
