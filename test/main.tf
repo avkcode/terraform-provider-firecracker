@@ -6,7 +6,7 @@ provider "firecracker" {
 # Define a Firecracker VM resource
 resource "firecracker_vm" "example_vm" {
   kernel_image_path = "/srv/terraform-provider-firecracker/test/vmlinux" # Path to the kernel image
-  boot_args         = "console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw rootfstype=ext4 init=/bin/bash rootwait"
+  boot_args         = "console=ttyS0 noapic reboot=k panic=1 pci=off root=/dev/vda rootfstype=ext4 rw init=/sbin/init"
 
   drives {
     drive_id       = "rootfs"
