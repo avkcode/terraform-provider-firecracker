@@ -35,7 +35,7 @@ build:
 	@echo "Build complete."
 
 # Add dependency tracking to run target
-run: build check-terraform
+run: build check-terraform setup
 	@echo "Running Terraform..."
 	@rm -rf test/.terraform.lock.hcl
 	@terraform -chdir=test init
