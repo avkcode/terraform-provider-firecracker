@@ -27,44 +27,44 @@ func resourceFirecrackerVM() *schema.Resource {
             "kernel_image_path": {
                 Type:         schema.TypeString,
                 Required:     true,
-                Description:  "Path to the kernel image.",
+                Description:  "Path to the kernel image. Must be accessible by the Firecracker process. This should be an uncompressed Linux kernel binary (vmlinux format).",
                 ValidateFunc: validation.StringIsNotEmpty,
             },
             "boot_args": {
                 Type:        schema.TypeString,
                 Optional:    true,
                 Default:     "console=ttyS0 noapic reboot=k panic=1 pci=off root=/dev/vda rootfstype=ext4 rw init=/sbin/init",
-                Description: "Boot arguments for the kernel.",
+                Description: "Boot arguments for the kernel. These are passed to the kernel at boot time. The default arguments are suitable for most Linux distributions with an ext4 root filesystem.",
             },
             "drives": {
                 Type:        schema.TypeList,
                 Required:    true,
-                Description: "List of drives attached to the VM.",
+                Description: "List of drives attached to the VM. At least one drive must be specified, typically containing the root filesystem.",
                 MinItems:    1,
                 Elem: &schema.Resource{
                     Schema: map[string]*schema.Schema{
                         "drive_id": {
                             Type:         schema.TypeString,
                             Required:     true,
-                            Description:  "ID of the drive.",
+                            Description:  "ID of the drive. This is used to identify the drive within Firecracker and must be unique within the VM.",
                             ValidateFunc: validation.StringIsNotEmpty,
                         },
                         "path_on_host": {
                             Type:         schema.TypeString,
                             Required:     true,
-                            Description:  "Path to the drive on the host.",
+                            Description:  "Path to the drive on the host. This must be accessible by the Firecracker process and should be a valid disk image (e.g., ext4 filesystem).",
                             ValidateFunc: validation.StringIsNotEmpty,
                         },
                         "is_root_device": {
                             Type:        schema.TypeBool,
                             Required:    true,
-                            Description: "Whether this drive is the root device.",
+                            Description: "Whether this drive is the root device. Only one drive can be marked as the root device. This should be set to true for the drive containing the root filesystem.",
                         },
                         "is_read_only": {
                             Type:        schema.TypeBool,
                             Optional:    true,
                             Default:     false,
-                            Description: "Whether the drive is read-only.",
+                            Description: "Whether the drive is read-only. Set to true for immutable drives like OS images, and false for drives that need to persist data.",
                         },
                     },
                 },
@@ -73,20 +73,20 @@ func resourceFirecrackerVM() *schema.Resource {
                 Type:        schema.TypeList,
                 MaxItems:    1,
                 Required:    true,
-                Description: "Machine configuration for the VM.",
+                Description: "Machine configuration for the VM. This defines the virtual hardware resources allocated to the VM.",
                 Elem: &schema.Resource{
                     Schema: map[string]*schema.Schema{
                         "vcpu_count": {
                             Type:         schema.TypeInt,
                             Required:     true,
-                            Description:  "Number of vCPUs.",
-                            ValidateFunc: validation.IntAtLeast(1),
+                            Description:  "Number of vCPUs. Must be between 1 and 32.",
+                            ValidateFunc: validation.IntBetween(1, 32),
                         },
                         "mem_size_mib": {
                             Type:         schema.TypeInt,
                             Required:     true,
-                            Description:  "Memory size in MiB.",
-                            ValidateFunc: validation.IntAtLeast(128),
+                            Description:  "Memory size in MiB. Must be between 128 and 32768.",
+                            ValidateFunc: validation.IntBetween(128, 32768),
                         },
                     },
                 },
@@ -94,25 +94,25 @@ func resourceFirecrackerVM() *schema.Resource {
             "network_interfaces": {
                 Type:        schema.TypeList,
                 Optional:    true,
-                Description: "List of network interfaces attached to the VM.",
+                Description: "List of network interfaces attached to the VM. Each interface connects to a TAP device on the host.",
                 Elem: &schema.Resource{
                     Schema: map[string]*schema.Schema{
                         "iface_id": {
                             Type:         schema.TypeString,
                             Required:     true,
-                            Description:  "ID of the network interface.",
+                            Description:  "ID of the network interface. This is used to identify the interface within Firecracker and must be unique within the VM.",
                             ValidateFunc: validation.StringIsNotEmpty,
                         },
                         "host_dev_name": {
                             Type:         schema.TypeString,
                             Required:     true,
-                            Description:  "Host device name for the interface.",
+                            Description:  "Host device name for the interface. This should be a TAP device that exists on the host (e.g., 'tap0').",
                             ValidateFunc: validation.StringIsNotEmpty,
                         },
                         "guest_mac": {
                             Type:         schema.TypeString,
                             Optional:     true,
-                            Description:  "MAC address for the guest.",
+                            Description:  "MAC address for the guest network interface. If not specified, Firecracker will generate one. Format: 'XX:XX:XX:XX:XX:XX'.",
                             ValidateFunc: validation.StringMatch(regexp.MustCompile(`^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$`), "must be a valid MAC address"),
                         },
                     },
@@ -121,11 +121,35 @@ func resourceFirecrackerVM() *schema.Resource {
         },
         Timeouts: &schema.ResourceTimeout{
             Create: schema.DefaultTimeout(10 * time.Minute),
-            Update: schema.DefaultTimeout(10 * time.Minute),
-            Delete: schema.DefaultTimeout(10 * time.Minute),
+            Update: schema.DefaultTimeout(5 * time.Minute),
+            Delete: schema.DefaultTimeout(5 * time.Minute),
+            Read:   schema.DefaultTimeout(1 * time.Minute),
         },
         Importer: &schema.ResourceImporter{
-            StateContext: schema.ImportStatePassthroughContext,
+            StateContext: func(ctx context.Context, d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
+                client := meta.(*FirecrackerClient)
+                vmID := d.Id()
+                
+                tflog.Info(ctx, "Importing Firecracker VM", map[string]interface{}{
+                    "id": vmID,
+                })
+                
+                // Get VM details from API
+                vmInfo, err := client.GetVM(ctx, vmID)
+                if err != nil {
+                    return nil, fmt.Errorf("error importing VM %s: %w", vmID, err)
+                }
+                
+                if vmInfo == nil {
+                    return nil, fmt.Errorf("VM with ID %s not found", vmID)
+                }
+                
+                // Read the resource data from the imported VM
+                d.SetId(vmID)
+                resourceFirecrackerVMRead(ctx, d, meta)
+                
+                return []*schema.ResourceData{d}, nil
+            },
         },
     }
 }
@@ -231,6 +255,9 @@ func resourceFirecrackerVMRead(ctx context.Context, d *schema.ResourceData, m in
         d.SetId("")
         return diags
     }
+    
+    // Set the ID to ensure it's properly tracked in state
+    d.SetId(vmID)
 
     // Update the resource data based on the VM info
     // This is a simplified example - you would need to adapt this to match

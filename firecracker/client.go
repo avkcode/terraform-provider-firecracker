@@ -9,6 +9,7 @@ import (
     "net/http"
     "time"
 
+    "github.com/hashicorp/go-retryablehttp"
     "github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
@@ -25,16 +26,23 @@ type httpClient interface {
     Do(req *http.Request) (*http.Response, error)
 }
 
-// defaultHTTPClient returns a default HTTP client with reasonable timeouts
+// defaultHTTPClient returns a default HTTP client with reasonable timeouts and retry logic
 func defaultHTTPClient() *http.Client {
-    return &http.Client{
-        Timeout: 30 * time.Second,
-        Transport: &http.Transport{
-            MaxIdleConns:        100,
-            MaxIdleConnsPerHost: 20,
-            IdleConnTimeout:     90 * time.Second,
-        },
+    retryClient := retryablehttp.NewClient()
+    retryClient.RetryMax = 3
+    retryClient.RetryWaitMin = 1 * time.Second
+    retryClient.RetryWaitMax = 5 * time.Second
+    retryClient.Logger = nil // Disable default logger
+    
+    // Configure the underlying transport
+    retryClient.HTTPClient.Timeout = 30 * time.Second
+    retryClient.HTTPClient.Transport = &http.Transport{
+        MaxIdleConns:        100,
+        MaxIdleConnsPerHost: 20,
+        IdleConnTimeout:     90 * time.Second,
     }
+    
+    return retryClient.StandardClient()
 }
 
 // CreateVM sends a request to create a new Firecracker VM
@@ -47,12 +55,12 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
 
     jsonPayload, err := json.Marshal(config)
     if err != nil {
-        return fmt.Errorf("failed to marshal payload: %w", err)
+        return fmt.Errorf("failed to marshal VM configuration payload: %w", err)
     }
 
     req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(jsonPayload))
     if err != nil {
-        return fmt.Errorf("failed to create request: %w", err)
+        return fmt.Errorf("failed to create HTTP request for VM creation: %w", err)
     }
     req.Header.Set("Content-Type", "application/json")
 
@@ -63,17 +71,109 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
 
     resp, err := client.Do(req)
     if err != nil {
-        return fmt.Errorf("failed to send request: %w", err)
+        return fmt.Errorf("failed to send VM creation request: %w", err)
     }
     defer resp.Body.Close()
 
     body, _ := io.ReadAll(resp.Body)
     if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusCreated {
-        return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+        return fmt.Errorf("API error when creating VM: status=%d, response=%s", resp.StatusCode, string(body))
     }
     
     tflog.Info(ctx, "VM created successfully", map[string]interface{}{
         "status_code": resp.StatusCode,
+    })
+    
+    return nil
+}
+
+// StartVM sends a request to start a Firecracker VM
+func (c *FirecrackerClient) StartVM(ctx context.Context, vmID string) error {
+    url := fmt.Sprintf("%s/vm/%s/actions", c.BaseURL, vmID)
+    tflog.Debug(ctx, "Starting VM", map[string]interface{}{
+        "url": url,
+        "id":  vmID,
+    })
+
+    payload := map[string]interface{}{
+        "action_type": "InstanceStart",
+    }
+
+    jsonPayload, err := json.Marshal(payload)
+    if err != nil {
+        return fmt.Errorf("failed to marshal VM start payload: %w", err)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonPayload))
+    if err != nil {
+        return fmt.Errorf("failed to create HTTP request for VM start: %w", err)
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    client := c.HTTPClient
+    if client == nil {
+        client = defaultHTTPClient()
+    }
+
+    resp, err := client.Do(req)
+    if err != nil {
+        return fmt.Errorf("failed to send VM start request: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("API error when starting VM: status=%d, response=%s", resp.StatusCode, string(body))
+    }
+
+    tflog.Info(ctx, "VM started successfully", map[string]interface{}{
+        "id": vmID,
+    })
+    
+    return nil
+}
+
+// StopVM sends a request to stop a Firecracker VM
+func (c *FirecrackerClient) StopVM(ctx context.Context, vmID string) error {
+    url := fmt.Sprintf("%s/vm/%s/actions", c.BaseURL, vmID)
+    tflog.Debug(ctx, "Stopping VM", map[string]interface{}{
+        "url": url,
+        "id":  vmID,
+    })
+
+    payload := map[string]interface{}{
+        "action_type": "SendCtrlAltDel",
+    }
+
+    jsonPayload, err := json.Marshal(payload)
+    if err != nil {
+        return fmt.Errorf("failed to marshal VM stop payload: %w", err)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonPayload))
+    if err != nil {
+        return fmt.Errorf("failed to create HTTP request for VM stop: %w", err)
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    client := c.HTTPClient
+    if client == nil {
+        client = defaultHTTPClient()
+    }
+
+    resp, err := client.Do(req)
+    if err != nil {
+        return fmt.Errorf("failed to send VM stop request: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+        body, _ := io.ReadAll(resp.Body)
+        return fmt.Errorf("API error when stopping VM: status=%d, response=%s", resp.StatusCode, string(body))
+    }
+
+    tflog.Info(ctx, "VM stop signal sent successfully", map[string]interface{}{
+        "id": vmID,
     })
     
     return nil
@@ -89,7 +189,7 @@ func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]
 
     req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
     if err != nil {
-        return nil, fmt.Errorf("failed to create request: %w", err)
+        return nil, fmt.Errorf("failed to create HTTP request for getting VM info: %w", err)
     }
 
     client := c.HTTPClient
@@ -99,7 +199,7 @@ func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]
 
     resp, err := client.Do(req)
     if err != nil {
-        return nil, fmt.Errorf("failed to send request: %w", err)
+        return nil, fmt.Errorf("failed to send request for getting VM info: %w", err)
     }
     defer resp.Body.Close()
 
@@ -109,12 +209,12 @@ func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]
 
     if resp.StatusCode != http.StatusOK {
         body, _ := io.ReadAll(resp.Body)
-        return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+        return nil, fmt.Errorf("API error when getting VM info: status=%d, response=%s", resp.StatusCode, string(body))
     }
 
     var result map[string]interface{}
     if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-        return nil, fmt.Errorf("failed to decode response: %w", err)
+        return nil, fmt.Errorf("failed to decode VM info response: %w", err)
     }
 
     return result, nil
@@ -130,7 +230,7 @@ func (c *FirecrackerClient) DeleteVM(ctx context.Context, vmID string) error {
 
     req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
     if err != nil {
-        return fmt.Errorf("failed to create request: %w", err)
+        return fmt.Errorf("failed to create HTTP request for VM deletion: %w", err)
     }
 
     client := c.HTTPClient
@@ -140,7 +240,7 @@ func (c *FirecrackerClient) DeleteVM(ctx context.Context, vmID string) error {
 
     resp, err := client.Do(req)
     if err != nil {
-        return fmt.Errorf("failed to send request: %w", err)
+        return fmt.Errorf("failed to send VM deletion request: %w", err)
     }
     defer resp.Body.Close()
 
@@ -153,7 +253,7 @@ func (c *FirecrackerClient) DeleteVM(ctx context.Context, vmID string) error {
 
     if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
         body, _ := io.ReadAll(resp.Body)
-        return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+        return fmt.Errorf("API error when deleting VM: status=%d, response=%s", resp.StatusCode, string(body))
     }
 
     tflog.Info(ctx, "VM deleted successfully", map[string]interface{}{
@@ -174,12 +274,12 @@ func (c *FirecrackerClient) UpdateVM(ctx context.Context, vmID string, config ma
 
     jsonPayload, err := json.Marshal(config)
     if err != nil {
-        return fmt.Errorf("failed to marshal payload: %w", err)
+        return fmt.Errorf("failed to marshal VM update payload: %w", err)
     }
 
     req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewBuffer(jsonPayload))
     if err != nil {
-        return fmt.Errorf("failed to create request: %w", err)
+        return fmt.Errorf("failed to create HTTP request for VM update: %w", err)
     }
     req.Header.Set("Content-Type", "application/json")
 
@@ -190,13 +290,13 @@ func (c *FirecrackerClient) UpdateVM(ctx context.Context, vmID string, config ma
 
     resp, err := client.Do(req)
     if err != nil {
-        return fmt.Errorf("failed to send request: %w", err)
+        return fmt.Errorf("failed to send VM update request: %w", err)
     }
     defer resp.Body.Close()
 
     if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
         body, _ := io.ReadAll(resp.Body)
-        return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+        return fmt.Errorf("API error when updating VM: status=%d, response=%s", resp.StatusCode, string(body))
     }
 
     tflog.Info(ctx, "VM updated successfully", map[string]interface{}{

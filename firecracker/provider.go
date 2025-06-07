@@ -36,6 +36,9 @@ func Provider() *schema.Provider {
         ResourcesMap: map[string]*schema.Resource{
             "firecracker_vm": resourceFirecrackerVM(),
         },
+        DataSourcesMap: map[string]*schema.Resource{
+            "firecracker_vm": dataSourceFirecrackerVM(),
+        },
         ConfigureContextFunc: configureProvider,
     }
     
