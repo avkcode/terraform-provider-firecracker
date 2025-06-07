@@ -120,9 +120,10 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 apiDriveConfig["is_read_only"] = false
             }
             
-            // Add partuuid for root device to ensure it can be mounted
+            // For root devices, we need to ensure they can be properly mounted
             if apiDriveConfig["is_root_device"].(bool) {
-                apiDriveConfig["partuuid"] = "rootfs"
+                // Don't set partuuid as it's causing issues with mounting
+                // Instead, we'll rely on the device path in boot args
             }
             
             // Enhanced debugging for each drive
