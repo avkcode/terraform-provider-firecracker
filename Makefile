@@ -77,13 +77,18 @@ check-files:
 # Add a check for all dependencies
 check-deps: check-terraform
 	@echo "Checking for required dependencies..."
-	@if ! command -v go &> /dev/null; then \
+	@if command -v go &> /dev/null; then \
+		echo "✅ Go found at: $$(which go)"; \
+	elif [ -x /usr/local/go/bin/go ]; then \
+		echo "✅ Go found at: /usr/local/go/bin/go"; \
+		echo "⚠️  Warning: Go is not in your PATH. Consider adding /usr/local/go/bin to your PATH."; \
+		export PATH=$$PATH:/usr/local/go/bin; \
+	else \
 		echo "❌ Error: go command not found"; \
 		echo "Please install Go first:"; \
 		echo "  Visit https://golang.org/doc/install"; \
 		exit 1; \
 	fi
-	@echo "✅ Go found at: $$(which go)"
 	
 	@if ! command -v firecracker &> /dev/null; then \
 		echo "❌ Error: firecracker command not found"; \
@@ -107,7 +112,11 @@ check-deps: check-terraform
 # Fix the build target to create directories if they don't exist
 build: check-deps
 	@echo "Building provider..."
-	@go build -o terraform-provider-firecracker
+	@if command -v go &> /dev/null; then \
+		go build -o terraform-provider-firecracker; \
+	else \
+		/usr/local/go/bin/go build -o terraform-provider-firecracker; \
+	fi
 	@mkdir -p ~/.terraform.d/plugins/registry.terraform.io/hashicorp/firecracker/0.1.0/linux_amd64/
 	@cp terraform-provider-firecracker ~/.terraform.d/plugins/registry.terraform.io/hashicorp/firecracker/0.1.0/linux_amd64/
 	@echo "✅ Build complete."
