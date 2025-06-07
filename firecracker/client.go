@@ -7,6 +7,7 @@ import (
     "fmt"
     "io"
     "net/http"
+    "os"
     "time"
 
     "github.com/hashicorp/go-retryablehttp"
@@ -54,6 +55,31 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
 
     // Boot source is now configured earlier in the process, before drives
 
+    // First, configure boot source before anything else
+    if bootSource, ok := config["boot-source"].(map[string]interface{}); ok {
+        bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
+        tflog.Debug(ctx, "Configuring boot source", map[string]interface{}{
+            "kernel_image_path": bootSource["kernel_image_path"],
+            "boot_args": bootSource["boot_args"],
+        })
+    
+        // Ensure the kernel image path exists
+        kernelPath := bootSource["kernel_image_path"].(string)
+        if _, err := os.Stat(kernelPath); os.IsNotExist(err) {
+            tflog.Error(ctx, "Kernel image file does not exist", map[string]interface{}{
+                "kernel_path": kernelPath,
+            })
+            return fmt.Errorf("kernel image file does not exist: %s", kernelPath)
+        }
+    
+        if err := c.putComponent(ctx, bootSourceURL, bootSource); err != nil {
+            return fmt.Errorf("failed to configure boot source: %w", err)
+        }
+        tflog.Debug(ctx, "Boot source configured successfully", nil)
+    } else {
+        return fmt.Errorf("boot source configuration is required but was not provided")
+    }
+
     // Configure machine config
     if machineConfig, ok := config["machine-config"].(map[string]interface{}); ok {
         machineConfigURL := fmt.Sprintf("%s/machine-config", c.BaseURL)
@@ -69,31 +95,6 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             "drives_count": len(drives),
             "drives":       drives,
         })
-        
-        // First, configure boot source to ensure it's ready before drives
-        if bootSource, ok := config["boot-source"].(map[string]interface{}); ok {
-            bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
-            tflog.Debug(ctx, "Configuring boot source", map[string]interface{}{
-                "kernel_image_path": bootSource["kernel_image_path"],
-                "boot_args": bootSource["boot_args"],
-            })
-        
-            // Ensure the kernel image path exists
-            kernelPath := bootSource["kernel_image_path"].(string)
-            if _, err := http.Head(kernelPath); err != nil {
-                tflog.Warn(ctx, "Kernel image path may not be accessible", map[string]interface{}{
-                    "kernel_path": kernelPath,
-                    "error": err.Error(),
-                })
-            }
-        
-            if err := c.putComponent(ctx, bootSourceURL, bootSource); err != nil {
-                return fmt.Errorf("failed to configure boot source: %w", err)
-            }
-            tflog.Debug(ctx, "Boot source configured successfully", nil)
-        } else {
-            return fmt.Errorf("boot source configuration is required but was not provided")
-        }
         
         // First pass: configure root device
         for _, driveRaw := range drives {
