@@ -330,44 +330,45 @@ func resourceFirecrackerVMUpdate(ctx context.Context, d *schema.ResourceData, m 
     })
     
     // Check which fields have changed
-    var updatePayload = make(map[string]interface{})
+    var hasChanges bool
     
-    // Handle machine config updates
+    // Log changes that would require VM recreation
     if d.HasChange("machine_config") {
-        machineConfigRaw := d.Get("machine_config").([]interface{})[0].(map[string]interface{})
-        updatePayload["machine-config"] = map[string]interface{}{
-            "vcpu_count":   machineConfigRaw["vcpu_count"].(int),
-            "mem_size_mib": machineConfigRaw["mem_size_mib"].(int),
-        }
+        tflog.Warn(ctx, "Machine configuration changes require VM recreation", map[string]interface{}{
+            "id": vmID,
+        })
+        hasChanges = true
     }
     
-    // Handle network interface updates
     if d.HasChange("network_interfaces") {
-        networkInterfaces := []map[string]interface{}{}
-        for _, rawIface := range d.Get("network_interfaces").([]interface{}) {
-            iface := rawIface.(map[string]interface{})
-            ifaceMap := map[string]interface{}{
-                "iface_id":      iface["iface_id"].(string),
-                "host_dev_name": iface["host_dev_name"].(string),
-            }
-            
-            if mac, ok := iface["guest_mac"].(string); ok && mac != "" {
-                ifaceMap["guest_mac"] = mac
-            }
-            
-            networkInterfaces = append(networkInterfaces, ifaceMap)
-        }
-        updatePayload["network-interfaces"] = networkInterfaces
+        tflog.Warn(ctx, "Network interface changes require VM recreation", map[string]interface{}{
+            "id": vmID,
+        })
+        hasChanges = true
     }
     
-    // If there are changes to apply
-    if len(updatePayload) > 0 {
-        err := client.UpdateVM(ctx, vmID, updatePayload)
+    if d.HasChange("kernel_image_path") || d.HasChange("boot_args") {
+        tflog.Warn(ctx, "Boot configuration changes require VM recreation", map[string]interface{}{
+            "id": vmID,
+        })
+        hasChanges = true
+    }
+    
+    if d.HasChange("drives") {
+        tflog.Warn(ctx, "Drive configuration changes require VM recreation", map[string]interface{}{
+            "id": vmID,
+        })
+        hasChanges = true
+    }
+    
+    // If there are changes, call the API (which will just log a warning)
+    if hasChanges {
+        err := client.UpdateVM(ctx, vmID, nil)
         if err != nil {
             return diag.FromErr(fmt.Errorf("failed to update VM: %w", err))
         }
         
-        tflog.Info(ctx, "Firecracker VM updated successfully", map[string]interface{}{
+        tflog.Info(ctx, "Firecracker VM update processed (note: most changes require recreation)", map[string]interface{}{
             "id": vmID,
         })
     } else {
