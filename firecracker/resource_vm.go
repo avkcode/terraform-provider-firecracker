@@ -155,7 +155,6 @@ func resourceFirecrackerVM() *schema.Resource {
 // resourceFirecrackerVMCreate creates a new Firecracker VM.
 func resourceFirecrackerVMCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
     client := m.(*FirecrackerClient)
-    var diags diag.Diagnostics
 
     // Generate a unique ID for the VM
     vmID := uuid.New().String()
