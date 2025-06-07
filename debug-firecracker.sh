@@ -5,8 +5,16 @@
 echo "Firecracker VM Debugging Tool"
 echo "============================"
 
+# Get paths from Terraform configuration
+KERNEL_PATH=$(grep -A1 "kernel_image_path" test/main.tf | grep -v "kernel_image_path" | sed 's/[^"]*"\([^"]*\)".*/\1/')
+ROOTFS_PATH=$(grep -A1 "path_on_host" test/main.tf | grep -v "path_on_host" | head -1 | sed 's/[^"]*"\([^"]*\)".*/\1/')
+
+echo "Detected paths from Terraform config:"
+echo "Kernel: $KERNEL_PATH"
+echo "Rootfs: $ROOTFS_PATH"
+echo ""
+
 # Check if kernel image exists
-KERNEL_PATH="/path/to/vmlinux"
 if [ -f "$KERNEL_PATH" ]; then
   echo "[✓] Kernel image exists: $KERNEL_PATH"
   ls -la "$KERNEL_PATH"
@@ -15,7 +23,6 @@ else
 fi
 
 # Check if rootfs exists
-ROOTFS_PATH="/path/to/rootfs.ext4"
 if [ -f "$ROOTFS_PATH" ]; then
   echo "[✓] Root filesystem exists: $ROOTFS_PATH"
   ls -la "$ROOTFS_PATH"

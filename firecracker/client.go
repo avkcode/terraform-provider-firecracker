@@ -52,7 +52,7 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
         "config": config,
     })
 
-    // Boot source is now configured earlier in the process
+    // Boot source is now configured earlier in the process, before drives
 
     // Configure machine config
     if machineConfig, ok := config["machine-config"].(map[string]interface{}); ok {
@@ -73,10 +73,16 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
         // First, configure boot source to ensure it's ready before drives
         if bootSource, ok := config["boot-source"].(map[string]interface{}); ok {
             bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
+            tflog.Debug(ctx, "Configuring boot source", map[string]interface{}{
+                "kernel_image_path": bootSource["kernel_image_path"],
+                "boot_args": bootSource["boot_args"],
+            })
             if err := c.putComponent(ctx, bootSourceURL, bootSource); err != nil {
                 return fmt.Errorf("failed to configure boot source: %w", err)
             }
             tflog.Debug(ctx, "Boot source configured successfully", nil)
+        } else {
+            return fmt.Errorf("boot source configuration is required but was not provided")
         }
         
         // First pass: configure root device
@@ -248,6 +254,16 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
         }
     }
 
+    // Verify all required components are configured before starting
+    tflog.Debug(ctx, "Verifying all required components are configured", nil)
+    
+    // Check boot source
+    bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
+    bootSource, err := c.getComponent(ctx, bootSourceURL)
+    if err != nil || bootSource == nil || len(bootSource) == 0 {
+        return fmt.Errorf("boot source is not properly configured, cannot start VM")
+    }
+    
     // Log the full configuration before starting the VM
     tflog.Debug(ctx, "Full VM configuration before starting", map[string]interface{}{
         "boot_source":        config["boot-source"],
