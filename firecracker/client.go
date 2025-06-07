@@ -70,7 +70,13 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
 
     // Configure drives
     if drives, ok := config["drives"].([]interface{}); ok {
-        for _, driveRaw := range drives {
+        // Log all drives for debugging
+        tflog.Debug(ctx, "All drives configuration", map[string]interface{}{
+            "drives_count": len(drives),
+            "drives":       drives,
+        })
+        
+        for i, driveRaw := range drives {
             drive, ok := driveRaw.(map[string]interface{})
             if !ok {
                 return fmt.Errorf("invalid drive configuration format")
@@ -105,17 +111,23 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 apiDriveConfig["is_read_only"] = readOnlyStr == "true"
             }
             
-            tflog.Debug(ctx, "Configuring drive", map[string]interface{}{
+            // Enhanced debugging for each drive
+            tflog.Debug(ctx, fmt.Sprintf("Drive %d configuration details", i), map[string]interface{}{
                 "drive_id":       driveID,
                 "url":            driveURL,
                 "is_root_device": apiDriveConfig["is_root_device"],
                 "path_on_host":   apiDriveConfig["path_on_host"],
                 "is_read_only":   apiDriveConfig["is_read_only"],
+                "raw_config":     drive,
+                "api_config":     apiDriveConfig,
             })
             
             if err := c.putComponent(ctx, driveURL, apiDriveConfig); err != nil {
                 return fmt.Errorf("failed to configure drive %s: %w", driveID, err)
             }
+            
+            // Verify the drive was configured correctly
+            tflog.Debug(ctx, fmt.Sprintf("Drive %s configured successfully", driveID), nil)
         }
     }
 
@@ -135,6 +147,14 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
         }
     }
 
+    // Log the full configuration before starting the VM
+    tflog.Debug(ctx, "Full VM configuration before starting", map[string]interface{}{
+        "boot_source":        config["boot-source"],
+        "machine_config":     config["machine-config"],
+        "drives":             config["drives"],
+        "network_interfaces": config["network-interfaces"],
+    })
+    
     // Start the VM
     actionsURL := fmt.Sprintf("%s/actions", c.BaseURL)
     startAction := map[string]interface{}{
@@ -173,6 +193,11 @@ func (c *FirecrackerClient) putComponent(ctx context.Context, url string, payloa
 
     resp, err := client.Do(req)
     if err != nil {
+        tflog.Error(ctx, "Failed to send request to Firecracker API", map[string]interface{}{
+            "url":     url,
+            "error":   err.Error(),
+            "payload": string(jsonPayload),
+        })
         return fmt.Errorf("failed to send request: %w", err)
     }
     defer resp.Body.Close()
@@ -180,16 +205,18 @@ func (c *FirecrackerClient) putComponent(ctx context.Context, url string, payloa
     if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
         body, _ := io.ReadAll(resp.Body)
         tflog.Error(ctx, "Firecracker API error", map[string]interface{}{
-            "url": url,
-            "status": resp.StatusCode,
-            "response": string(body),
+            "url":             url,
+            "status":          resp.StatusCode,
+            "response":        string(body),
             "request_payload": string(jsonPayload),
+            "headers":         resp.Header,
         })
-        return fmt.Errorf("API error: status=%d, response=%s", resp.StatusCode, string(body))
+        return fmt.Errorf("API error: status=%d, response=%s, url=%s, payload=%s", 
+                          resp.StatusCode, string(body), url, string(jsonPayload))
     }
 
     tflog.Debug(ctx, "Firecracker API request successful", map[string]interface{}{
-        "url": url,
+        "url":    url,
         "status": resp.StatusCode,
     })
 
