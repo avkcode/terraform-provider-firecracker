@@ -181,6 +181,11 @@ func resourceFirecrackerVMCreate(ctx context.Context, d *schema.ResourceData, m 
             "is_read_only":   drive["is_read_only"].(bool),
         }
         
+        // Convert boolean values to strings for Firecracker API
+        if driveMap["is_root_device"].(bool) {
+            driveMap["is_root_device"] = true
+        }
+        
         // Log the drive configuration for debugging
         tflog.Debug(ctx, "Drive configuration", map[string]interface{}{
             "drive_id":       driveMap["drive_id"],

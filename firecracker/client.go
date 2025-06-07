@@ -88,23 +88,19 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 drive["is_read_only"] = false
             }
             
-            // Firecracker API expects "is_root_device" as a string "true" or "false"
-            // Convert boolean to string for API compatibility
+            // Firecracker API expects "is_root_device" as a boolean
+            // Ensure it's properly formatted
             if rootDevice, ok := drive["is_root_device"].(bool); ok {
-                if rootDevice {
-                    drive["is_root_device"] = "true"
-                } else {
-                    drive["is_root_device"] = "false"
-                }
+                drive["is_root_device"] = rootDevice
+            } else if rootDeviceStr, ok := drive["is_root_device"].(string); ok {
+                drive["is_root_device"] = rootDeviceStr == "true"
             }
             
-            // Convert is_read_only to string as well for consistency
+            // Ensure is_read_only is properly formatted as boolean
             if readOnly, ok := drive["is_read_only"].(bool); ok {
-                if readOnly {
-                    drive["is_read_only"] = "true"
-                } else {
-                    drive["is_read_only"] = "false"
-                }
+                drive["is_read_only"] = readOnly
+            } else if readOnlyStr, ok := drive["is_read_only"].(string); ok {
+                drive["is_read_only"] = readOnlyStr == "true"
             }
             
             tflog.Debug(ctx, "Configuring drive", map[string]interface{}{
