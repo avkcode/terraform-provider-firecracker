@@ -162,13 +162,19 @@ start-socat:
 stop-socat:
 	@echo "Stopping socat..."
 	@if pgrep -f "socat TCP-LISTEN:8080" > /dev/null; then \
-		pkill -f "socat TCP-LISTEN:8080" || true; \
+		echo "Found socat process, stopping it..."; \
+		pkill -TERM -f "socat TCP-LISTEN:8080" || true; \
+		sleep 1; \
+		if pgrep -f "socat TCP-LISTEN:8080" > /dev/null; then \
+			echo "Socat still running, forcing kill..."; \
+			pkill -KILL -f "socat TCP-LISTEN:8080" || true; \
+		fi; \
 		echo "✅ socat stopped."; \
 	else \
 		echo "⚠️  No socat process found."; \
 	fi
 
-clean: stop-socat
+clean:
 	@echo "Cleaning up..."
 	@if [ -S /tmp/firecracker.sock ]; then \
 		rm -f /tmp/firecracker.sock; \
@@ -196,7 +202,13 @@ stop-firecracker:
 	fi
 
 # Add a full setup target
-setup: clean stop-firecracker start-firecracker start-socat
+setup:
+	@echo "Setting up environment..."
+	@$(MAKE) stop-socat || true
+	@$(MAKE) clean
+	@$(MAKE) stop-firecracker || true
+	@$(MAKE) start-firecracker
+	@$(MAKE) start-socat
 	@echo "✅ Environment is ready."
 
 # Add a full teardown target
