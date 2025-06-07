@@ -168,15 +168,24 @@ func resourceFirecrackerVMCreate(ctx context.Context, d *schema.ResourceData, m 
     // Get boot args and ensure it has the correct root device specification
     bootArgs := d.Get("boot_args").(string)
     
-    // Make sure we're using /dev/vda for the root device
-    if !strings.Contains(bootArgs, "root=/dev/vda") {
-        // If it contains root=PARTUUID=, replace it with root=/dev/vda
-        if strings.Contains(bootArgs, "root=PARTUUID=") {
-            bootArgs = strings.Replace(bootArgs, "root=PARTUUID=", "root=/dev/vda", 1)
-        } else {
-            // If it doesn't contain either, append root=/dev/vda
-            bootArgs += " root=/dev/vda"
-        }
+    // Ensure we have the correct root device in boot args
+    if !strings.Contains(bootArgs, "root=/dev/vda") && !strings.Contains(bootArgs, "root=/dev/vda1") {
+        // Remove any existing root= parameter
+        re := regexp.MustCompile(`root=\S+`)
+        bootArgs = re.ReplaceAllString(bootArgs, "")
+        
+        // Add root=/dev/vda
+        bootArgs = strings.TrimSpace(bootArgs) + " root=/dev/vda"
+    }
+    
+    // Ensure we have rootfstype if not already present
+    if !strings.Contains(bootArgs, "rootfstype=") {
+        bootArgs = strings.TrimSpace(bootArgs) + " rootfstype=ext4"
+    }
+    
+    // Add other important kernel parameters if not present
+    if !strings.Contains(bootArgs, "console=") {
+        bootArgs = strings.TrimSpace(bootArgs) + " console=ttyS0"
     }
     
     // Construct the boot source payload

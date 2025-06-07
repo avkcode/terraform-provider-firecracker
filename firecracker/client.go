@@ -68,7 +68,7 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
         }
     }
 
-    // Configure drives
+    // Configure drives - ensure root device is configured first
     if drives, ok := config["drives"].([]interface{}); ok {
         // Log all drives for debugging
         tflog.Debug(ctx, "All drives configuration", map[string]interface{}{
@@ -76,20 +76,92 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             "drives":       drives,
         })
         
+        // First pass: configure root device
+        for _, driveRaw := range drives {
+            drive, ok := driveRaw.(map[string]interface{})
+            if !ok {
+                return fmt.Errorf("invalid drive configuration format")
+            }
+            
+            // Check if this is the root device
+            isRootDevice := false
+            if rootDeviceVal, ok := drive["is_root_device"]; ok {
+                if rootDeviceStr, ok := rootDeviceVal.(string); ok {
+                    isRootDevice = rootDeviceStr == "true"
+                } else if rootDeviceBool, ok := rootDeviceVal.(bool); ok {
+                    isRootDevice = rootDeviceBool
+                }
+            }
+            
+            // Skip non-root devices in first pass
+            if !isRootDevice {
+                continue
+            }
+            
+            // Configure the root device first
+            driveID := "rootfs" // Force root device ID to be "rootfs"
+            driveURL := fmt.Sprintf("%s/drives/%s", c.BaseURL, driveID)
+            
+            // Create a clean drive configuration for the API
+            apiDriveConfig := map[string]interface{}{
+                "drive_id":       driveID,
+                "path_on_host":   drive["path_on_host"],
+                "is_root_device": true,
+            }
+            
+            // Set read-only flag
+            if readOnlyVal, ok := drive["is_read_only"]; ok {
+                if readOnlyStr, ok := readOnlyVal.(string); ok {
+                    apiDriveConfig["is_read_only"] = readOnlyStr == "true"
+                } else if readOnlyBool, ok := readOnlyVal.(bool); ok {
+                    apiDriveConfig["is_read_only"] = readOnlyBool
+                } else {
+                    apiDriveConfig["is_read_only"] = false
+                }
+            } else {
+                apiDriveConfig["is_read_only"] = false
+            }
+            
+            tflog.Debug(ctx, "Configuring root drive", map[string]interface{}{
+                "drive_id":     driveID,
+                "path_on_host": apiDriveConfig["path_on_host"],
+                "is_read_only": apiDriveConfig["is_read_only"],
+            })
+            
+            if err := c.putComponent(ctx, driveURL, apiDriveConfig); err != nil {
+                return fmt.Errorf("failed to configure root drive: %w", err)
+            }
+            
+            tflog.Debug(ctx, "Root drive configured successfully", nil)
+        }
+        
+        // Second pass: configure non-root devices
+        
         for i, driveRaw := range drives {
             drive, ok := driveRaw.(map[string]interface{})
             if !ok {
                 return fmt.Errorf("invalid drive configuration format")
             }
             
+            // Check if this is the root device
+            isRootDevice := false
+            if rootDeviceVal, ok := drive["is_root_device"]; ok {
+                if rootDeviceStr, ok := rootDeviceVal.(string); ok {
+                    isRootDevice = rootDeviceStr == "true"
+                } else if rootDeviceBool, ok := rootDeviceVal.(bool); ok {
+                    isRootDevice = rootDeviceBool
+                }
+            }
+            
+            // Skip root device in second pass as it's already configured
+            if isRootDevice {
+                continue
+            }
+            
             driveID := drive["drive_id"].(string)
             driveURL := fmt.Sprintf("%s/drives/%s", c.BaseURL, driveID)
             
             // Ensure drive configuration has all required fields
-            if _, ok := drive["is_root_device"]; !ok {
-                drive["is_root_device"] = false
-            }
-            
             if _, ok := drive["is_read_only"]; !ok {
                 drive["is_read_only"] = false
             }
@@ -122,8 +194,8 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             
             // For root devices, we need to ensure they can be properly mounted
             if apiDriveConfig["is_root_device"].(bool) {
-                // Don't set partuuid as it's causing issues with mounting
-                // Instead, we'll rely on the device path in boot args
+                // Set the drive ID to "rootfs" for the root device to ensure consistent naming
+                apiDriveConfig["drive_id"] = "rootfs"
             }
             
             // Enhanced debugging for each drive
