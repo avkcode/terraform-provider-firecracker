@@ -189,7 +189,7 @@ start-firecracker:
 	else \
 		firecracker --api-sock /tmp/firecracker.sock & \
 		echo "✅ Firecracker started successfully."; \
-		sleep 1; \  # Give Firecracker time to initialize
+		sleep 1; \
 	fi
 
 stop-firecracker:
