@@ -4,6 +4,7 @@ import (
     "context"
     "fmt"
     "regexp"
+    "strings"
     "time"
 
     "github.com/google/uuid"
@@ -164,10 +165,24 @@ func resourceFirecrackerVMCreate(ctx context.Context, d *schema.ResourceData, m 
         "id": vmID,
     })
 
+    // Get boot args and ensure it has the correct root device specification
+    bootArgs := d.Get("boot_args").(string)
+    
+    // Check if boot_args already contains root=PARTUUID=
+    if !strings.Contains(bootArgs, "root=PARTUUID=") {
+        // If it contains root=/dev/vda, replace it with root=PARTUUID=rootfs
+        if strings.Contains(bootArgs, "root=/dev/vda") {
+            bootArgs = strings.Replace(bootArgs, "root=/dev/vda", "root=PARTUUID=rootfs", 1)
+        } else {
+            // If it doesn't contain either, append root=PARTUUID=rootfs
+            bootArgs += " root=PARTUUID=rootfs"
+        }
+    }
+    
     // Construct the boot source payload
     bootSource := map[string]interface{}{
         "kernel_image_path": d.Get("kernel_image_path").(string),
-        "boot_args":         d.Get("boot_args").(string),
+        "boot_args":         bootArgs,
     }
 
     // Construct the drives payload
