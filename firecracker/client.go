@@ -78,6 +78,23 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             
             driveID := drive["drive_id"].(string)
             driveURL := fmt.Sprintf("%s/drives/%s", c.BaseURL, driveID)
+            
+            // Ensure drive configuration has all required fields
+            if _, ok := drive["is_root_device"]; !ok {
+                drive["is_root_device"] = false
+            }
+            
+            if _, ok := drive["is_read_only"]; !ok {
+                drive["is_read_only"] = false
+            }
+            
+            tflog.Debug(ctx, "Configuring drive", map[string]interface{}{
+                "drive_id": driveID,
+                "url": driveURL,
+                "is_root_device": drive["is_root_device"],
+                "path_on_host": drive["path_on_host"],
+            })
+            
             if err := c.putComponent(ctx, driveURL, drive); err != nil {
                 return fmt.Errorf("failed to configure drive %s: %w", driveID, err)
             }
@@ -120,6 +137,11 @@ func (c *FirecrackerClient) putComponent(ctx context.Context, url string, payloa
         return fmt.Errorf("failed to marshal payload: %w", err)
     }
 
+    tflog.Debug(ctx, "Sending PUT request to Firecracker API", map[string]interface{}{
+        "url": url,
+        "payload": string(jsonPayload),
+    })
+
     req, err := http.NewRequestWithContext(ctx, http.MethodPut, url, bytes.NewBuffer(jsonPayload))
     if err != nil {
         return fmt.Errorf("failed to create HTTP request: %w", err)
@@ -139,8 +161,19 @@ func (c *FirecrackerClient) putComponent(ctx context.Context, url string, payloa
 
     if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
         body, _ := io.ReadAll(resp.Body)
+        tflog.Error(ctx, "Firecracker API error", map[string]interface{}{
+            "url": url,
+            "status": resp.StatusCode,
+            "response": string(body),
+            "request_payload": string(jsonPayload),
+        })
         return fmt.Errorf("API error: status=%d, response=%s", resp.StatusCode, string(body))
     }
+
+    tflog.Debug(ctx, "Firecracker API request successful", map[string]interface{}{
+        "url": url,
+        "status": resp.StatusCode,
+    })
 
     return nil
 }

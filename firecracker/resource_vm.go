@@ -174,12 +174,22 @@ func resourceFirecrackerVMCreate(ctx context.Context, d *schema.ResourceData, m 
     drives := []map[string]interface{}{}
     for _, rawDrive := range d.Get("drives").([]interface{}) {
         drive := rawDrive.(map[string]interface{})
-        drives = append(drives, map[string]interface{}{
+        driveMap := map[string]interface{}{
             "drive_id":       drive["drive_id"].(string),
             "path_on_host":   drive["path_on_host"].(string),
             "is_root_device": drive["is_root_device"].(bool),
             "is_read_only":   drive["is_read_only"].(bool),
+        }
+        
+        // Log drive configuration for debugging
+        tflog.Debug(ctx, "Configuring drive for VM", map[string]interface{}{
+            "drive_id":       driveMap["drive_id"],
+            "path_on_host":   driveMap["path_on_host"],
+            "is_root_device": driveMap["is_root_device"],
+            "is_read_only":   driveMap["is_read_only"],
         })
+        
+        drives = append(drives, driveMap)
     }
 
     // Construct the machine config payload
