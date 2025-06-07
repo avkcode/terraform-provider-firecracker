@@ -1,4 +1,16 @@
-.DEFAULT_GOAL: help
+# Make help the default target by placing it first
+help:
+	@echo "Available commands:"
+	@echo "  build              - Build the provider and install it locally"
+	@echo "  run                - Build, initialize, and apply the Terraform configuration"
+	@echo "  test               - Run a basic API test against Firecracker"
+	@echo "  start-socat        - Start socat to forward traffic to Firecracker socket"
+	@echo "  stop-socat         - Stop the socat process"
+	@echo "  start-firecracker  - Start the Firecracker VMM"
+	@echo "  stop-firecracker   - Stop the Firecracker VMM"
+	@echo "  clean              - Clean up temporary files and stop services"
+	@echo "  setup              - Set up the complete environment"
+	@echo "  teardown           - Tear down the complete environment"
 
 # Add a check for terraform installation
 check-terraform:
@@ -40,20 +52,6 @@ check-files:
 	fi
 	@echo "All required files found."
 
-# Add a default target that shows available commands
-.PHONY: help
-help:
-	@echo "Available commands:"
-	@echo "  build              - Build the provider and install it locally"
-	@echo "  run                - Build, initialize, and apply the Terraform configuration"
-	@echo "  test               - Run a basic API test against Firecracker"
-	@echo "  start-socat        - Start socat to forward traffic to Firecracker socket"
-	@echo "  stop-socat         - Stop the socat process"
-	@echo "  start-firecracker  - Start the Firecracker VMM"
-	@echo "  stop-firecracker   - Stop the Firecracker VMM"
-	@echo "  clean              - Clean up temporary files and stop services"
-	@echo "  setup              - Set up the complete environment"
-	@echo "  teardown           - Tear down the complete environment"
 
 # Fix the build target to create directories if they don't exist
 build:
@@ -112,4 +110,4 @@ setup: clean stop-firecracker start-firecracker start-socat
 teardown: stop-socat stop-firecracker clean
 	@echo "Environment has been torn down."
 
-.PHONY: all help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform check-files
+.PHONY: help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform check-files
