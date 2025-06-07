@@ -6,8 +6,8 @@ echo "Firecracker VM Debugging Tool"
 echo "============================"
 
 # Get paths from Terraform configuration
-KERNEL_PATH=$(grep -A1 "kernel_image_path" test/main.tf | grep -v "kernel_image_path" | sed 's/[^"]*"\([^"]*\)".*/\1/')
-ROOTFS_PATH=$(grep -A1 "path_on_host" test/main.tf | grep -v "path_on_host" | head -1 | sed 's/[^"]*"\([^"]*\)".*/\1/')
+KERNEL_PATH=$(grep "kernel_image_path" test/main.tf | sed 's/.*kernel_image_path[^"]*"\([^"]*\)".*/\1/')
+ROOTFS_PATH=$(grep "path_on_host" test/main.tf | head -1 | sed 's/.*path_on_host[^"]*"\([^"]*\)".*/\1/')
 
 echo "Detected paths from Terraform config:"
 echo "Kernel: $KERNEL_PATH"

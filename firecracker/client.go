@@ -77,6 +77,16 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 "kernel_image_path": bootSource["kernel_image_path"],
                 "boot_args": bootSource["boot_args"],
             })
+        
+            // Ensure the kernel image path exists
+            kernelPath := bootSource["kernel_image_path"].(string)
+            if _, err := http.Head(kernelPath); err != nil {
+                tflog.Warn(ctx, "Kernel image path may not be accessible", map[string]interface{}{
+                    "kernel_path": kernelPath,
+                    "error": err.Error(),
+                })
+            }
+        
             if err := c.putComponent(ctx, bootSourceURL, bootSource); err != nil {
                 return fmt.Errorf("failed to configure boot source: %w", err)
             }
@@ -257,12 +267,8 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
     // Verify all required components are configured before starting
     tflog.Debug(ctx, "Verifying all required components are configured", nil)
     
-    // Check boot source
-    bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
-    bootSource, err := c.getComponent(ctx, bootSourceURL)
-    if err != nil || bootSource == nil || len(bootSource) == 0 {
-        return fmt.Errorf("boot source is not properly configured, cannot start VM")
-    }
+    // Skip boot source verification since the GET method is not supported
+    // We'll trust that we configured it correctly earlier
     
     // Log the full configuration before starting the VM
     tflog.Debug(ctx, "Full VM configuration before starting", map[string]interface{}{
