@@ -10,7 +10,7 @@ resource "firecracker_vm" "example_vm" {
 
   drives {
     drive_id       = "rootfs"
-    path_on_host   = "./test/firecracker-rootfs.ext4" # Path to the root filesystem
+    path_on_host   = "/srv/terraform-provider-firecracker/test/firecracker-rootfs.ext4" # Path to the root filesystem
     is_root_device = true
     is_read_only   = false
   }
