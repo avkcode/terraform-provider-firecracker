@@ -11,6 +11,33 @@ check-terraform:
 		exit 1; \
 	fi
 
+# Add a check for required files
+check-files:
+	@echo "Checking for required files..."
+	@if [ ! -f "test/vmlinux" ]; then \
+		echo "Error: Kernel file 'test/vmlinux' not found"; \
+		echo "You need to download a Firecracker-compatible kernel."; \
+		echo "You can download a sample kernel from:"; \
+		echo "  https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md#running-firecracker"; \
+		echo ""; \
+		echo "Example commands:"; \
+		echo "  mkdir -p test"; \
+		echo "  curl -fsSL -o test/vmlinux https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/kernels/vmlinux.bin"; \
+		exit 1; \
+	fi
+	@if [ ! -f "test/firecracker-rootfs.ext4" ]; then \
+		echo "Error: Root filesystem 'test/firecracker-rootfs.ext4' not found"; \
+		echo "You need to download a Firecracker-compatible root filesystem."; \
+		echo "You can download a sample rootfs from:"; \
+		echo "  https://github.com/firecracker-microvm/firecracker/blob/main/docs/getting-started.md#running-firecracker"; \
+		echo ""; \
+		echo "Example commands:"; \
+		echo "  mkdir -p test"; \
+		echo "  curl -fsSL -o test/firecracker-rootfs.ext4 https://s3.amazonaws.com/spec.ccfc.min/img/quickstart_guide/x86_64/rootfs/bionic.rootfs.ext4"; \
+		exit 1; \
+	fi
+	@echo "All required files found."
+
 # Add a default target that shows available commands
 .PHONY: help
 help:
@@ -35,17 +62,17 @@ build:
 	@echo "Build complete."
 
 # Add dependency tracking to run target
-run: build check-terraform setup
+run: build check-terraform check-files setup
 	@echo "Running Terraform..."
 	@rm -rf test/.terraform.lock.hcl
 	@terraform -chdir=test init
 	@terraform -chdir=test apply -auto-approve
 
 # Fix the test target to not start multiple Firecracker instances
-test: clean stop-firecracker start-firecracker start-socat
+test: clean stop-firecracker start-firecracker start-socat check-files
 	@echo "Testing the /boot-source endpoint..."
 	@curl -v -X PUT -H "Content-Type: application/json" \
-		-d '{"kernel_image_path":"/srv/terraform-provider-firecracker/test/vmlinux","boot_args":"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw"}' \
+		-d '{"kernel_image_path":"./test/vmlinux","boot_args":"console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw"}' \
 		http://localhost:8080
 
 # Fix the start-socat target to not recursively call itself
@@ -83,4 +110,4 @@ setup: clean stop-firecracker start-firecracker start-socat
 teardown: stop-socat stop-firecracker clean
 	@echo "Environment has been torn down."
 
-.PHONY: all help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform
+.PHONY: all help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform check-files
