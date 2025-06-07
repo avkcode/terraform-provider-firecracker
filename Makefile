@@ -1,6 +1,8 @@
 # Add a check for terraform installation
 check-terraform:
-	@if ! command -v terraform &> /dev/null; then \
+	@if command -v terraform &> /dev/null; then \
+		echo "Terraform found at: $$(which terraform)"; \
+	else \
 		echo "Error: terraform command not found"; \
 		echo "Please install Terraform first:"; \
 		echo "  1. Visit https://developer.hashicorp.com/terraform/downloads"; \
