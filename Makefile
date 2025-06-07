@@ -9,6 +9,11 @@ help:
 	@echo "  run                - Build, initialize, and apply the Terraform configuration"
 	@echo "  test               - Run a basic API test against Firecracker"
 	@echo ""
+	@echo "Advanced testing:"
+	@echo "  test-remote-exec   - Create a test configuration using remote-exec provisioner"
+	@echo "  setup-network      - Set up networking for remote-exec tests"
+	@echo "  prepare-ssh-image  - Instructions for preparing a VM image with SSH enabled"
+	@echo ""
 	@echo "Environment management:"
 	@echo "  setup              - Set up the complete environment"
 	@echo "  teardown           - Tear down the complete environment"
@@ -24,6 +29,7 @@ help:
 	@echo "  check-terraform    - Verify Terraform installation"
 	@echo "  check-files        - Verify required files exist"
 	@echo "  check-deps         - Verify all dependencies are installed"
+	@echo "  status             - Check the status of all services"
 
 # Add a check for terraform installation
 check-terraform:
@@ -185,4 +191,133 @@ status:
 	@echo "socat: $$(if pgrep -f 'socat TCP-LISTEN:8080' > /dev/null; then echo '✅ Running'; else echo '❌ Not running'; fi)"
 	@echo "Socket: $$(if [ -S /tmp/firecracker.sock ]; then echo '✅ Exists'; else echo '❌ Missing'; fi)"
 
-.PHONY: help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status
+# Add a remote-exec test target
+test-remote-exec: build check-terraform check-files setup
+	@echo "Testing remote-exec provisioner to install Docker..."
+	@mkdir -p test/remote-exec
+	@cat > test/remote-exec/main.tf << 'EOF'
+terraform {
+  required_providers {
+    firecracker = {
+      source = "hashicorp/firecracker"
+      version = "0.1.0"
+    }
+  }
+}
+
+provider "firecracker" {
+  base_url = "http://localhost:8080"
+}
+
+resource "firecracker_vm" "docker_vm" {
+  kernel_image_path = "../vmlinux"
+  boot_args         = "console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rw ip=dhcp"
+
+  drives {
+    drive_id       = "rootfs"
+    path_on_host   = "../firecracker-rootfs.ext4"
+    is_root_device = true
+    is_read_only   = false
+  }
+
+  machine_config {
+    vcpu_count   = 2
+    mem_size_mib = 2048
+  }
+
+  network_interfaces {
+    iface_id      = "eth0"
+    host_dev_name = "tap0"
+    guest_mac     = "AA:BB:CC:DD:EE:01"
+  }
+
+  # SSH connection for remote-exec
+  connection {
+    type        = "ssh"
+    user        = "root"
+    private_key = file("../id_rsa")
+    host        = "172.16.0.2"  # Assuming this is the IP of the VM
+    timeout     = "2m"
+  }
+
+  # Install Docker using remote-exec
+  provisioner "remote-exec" {
+    inline = [
+      "echo 'Installing Docker...'",
+      "apt-get update",
+      "apt-get install -y apt-transport-https ca-certificates curl software-properties-common",
+      "curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -",
+      "add-apt-repository 'deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable'",
+      "apt-get update",
+      "apt-get install -y docker-ce",
+      "systemctl enable docker",
+      "systemctl start docker",
+      "docker --version",
+      "echo 'Docker installation complete!'"
+    ]
+  }
+}
+EOF
+	@echo "✅ Created remote-exec test configuration"
+	@echo "Generating SSH key for remote access..."
+	@if [ ! -f "test/id_rsa" ]; then \
+		ssh-keygen -t rsa -b 2048 -f test/id_rsa -N ""; \
+		echo "✅ SSH key generated"; \
+	else \
+		echo "⚠️ SSH key already exists"; \
+	fi
+	@echo "To run this test, you need to:"
+	@echo "1. Ensure your Firecracker VM has SSH enabled"
+	@echo "2. Configure networking with the tap0 interface"
+	@echo "3. Add the public key to the VM's authorized_keys"
+	@echo "4. Run: terraform -chdir=test/remote-exec init && terraform -chdir=test/remote-exec apply"
+	@echo ""
+	@echo "Note: This test requires additional setup and is not fully automated."
+	@echo "For more information, see the documentation on setting up networking and SSH access."
+
+# Add a setup-network target to configure tap interfaces
+setup-network:
+	@echo "Setting up network for remote-exec test..."
+	@if ! ip link show tap0 &> /dev/null; then \
+		echo "Creating tap0 interface..."; \
+		ip tuntap add dev tap0 mode tap; \
+		ip addr add 172.16.0.1/24 dev tap0; \
+		ip link set tap0 up; \
+		echo "Enabling IP forwarding..."; \
+		echo 1 > /proc/sys/net/ipv4/ip_forward; \
+		echo "Setting up NAT..."; \
+		iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE; \
+		iptables -A FORWARD -i eth0 -o tap0 -m state --state RELATED,ESTABLISHED -j ACCEPT; \
+		iptables -A FORWARD -i tap0 -o eth0 -j ACCEPT; \
+		echo "✅ Network setup complete"; \
+	else \
+		echo "⚠️ tap0 interface already exists"; \
+	fi
+
+# Add a prepare-ssh-image target to create a VM image with SSH enabled
+prepare-ssh-image: check-files
+	@echo "Preparing VM image with SSH enabled..."
+	@if [ ! -f "test/id_rsa" ]; then \
+		echo "Generating SSH key..."; \
+		ssh-keygen -t rsa -b 2048 -f test/id_rsa -N ""; \
+	fi
+	@echo "This step requires manual intervention to:"
+	@echo "1. Mount the rootfs image"
+	@echo "2. Install SSH server"
+	@echo "3. Configure SSH to allow root login"
+	@echo "4. Add the public key to authorized_keys"
+	@echo ""
+	@echo "Example commands:"
+	@echo "  mkdir -p /mnt/rootfs"
+	@echo "  mount -o loop test/firecracker-rootfs.ext4 /mnt/rootfs"
+	@echo "  chroot /mnt/rootfs apt-get update"
+	@echo "  chroot /mnt/rootfs apt-get install -y openssh-server"
+	@echo "  mkdir -p /mnt/rootfs/root/.ssh"
+	@echo "  cat test/id_rsa.pub > /mnt/rootfs/root/.ssh/authorized_keys"
+	@echo "  chmod 600 /mnt/rootfs/root/.ssh/authorized_keys"
+	@echo "  echo 'PermitRootLogin yes' >> /mnt/rootfs/etc/ssh/sshd_config"
+	@echo "  umount /mnt/rootfs"
+	@echo ""
+	@echo "⚠️ Note: This is a manual process and requires root privileges."
+
+.PHONY: help build run test start-socat stop-socat clean start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status test-remote-exec setup-network prepare-ssh-image
