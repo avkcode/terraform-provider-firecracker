@@ -145,7 +145,7 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             
             // Verify the drive was configured correctly
             tflog.Debug(ctx, fmt.Sprintf("Drive %s configured successfully", driveID), map[string]interface{}{
-                "is_root_device": finalDriveConfig["is_root_device"],
+                "is_root_device": apiDriveConfig["is_root_device"],
             })
         }
     }
