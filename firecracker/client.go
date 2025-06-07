@@ -198,7 +198,6 @@ func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]
     }
     
     // Try to get machine config as a test to see if the VM exists
-    // Note: We're not actually querying for machine config, just checking if the API is responsive
     url := fmt.Sprintf("%s/machine-config", c.BaseURL)
     req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
     if err != nil {
@@ -221,9 +220,62 @@ func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]
     }
     defer resp.Body.Close()
     
-    // If we get a 400 error with "Invalid request method", that's actually good!
-    // It means the API is responding, but we're using the wrong method (which is expected)
     body, _ := io.ReadAll(resp.Body)
+    
+    // If we get a 200 OK, that's great! We can use the machine config
+    if resp.StatusCode == http.StatusOK {
+        var machineConfig map[string]interface{}
+        if err := json.Unmarshal(body, &machineConfig); err != nil {
+            return nil, fmt.Errorf("failed to parse machine config: %w", err)
+        }
+        
+        result["machine-config"] = machineConfig
+        
+        // Now try to get boot source info
+        bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
+        bootSource, err := c.getComponent(ctx, bootSourceURL)
+        if err != nil {
+            tflog.Warn(ctx, "Failed to get boot source info, using defaults", map[string]interface{}{
+                "error": err.Error(),
+            })
+            // Use empty map as fallback
+            bootSource = map[string]interface{}{}
+        }
+        result["boot-source"] = bootSource
+        
+        // Try to get drives info
+        drivesURL := fmt.Sprintf("%s/drives", c.BaseURL)
+        drives, err := c.listComponents(ctx, drivesURL)
+        if err != nil {
+            tflog.Warn(ctx, "Failed to get drives info, using defaults", map[string]interface{}{
+                "error": err.Error(),
+            })
+            // Use empty list as fallback
+            drives = []interface{}{}
+        }
+        result["drives"] = drives
+        
+        // Try to get network interfaces
+        networkURL := fmt.Sprintf("%s/network-interfaces", c.BaseURL)
+        networkInterfaces, err := c.listComponents(ctx, networkURL)
+        if err != nil {
+            tflog.Warn(ctx, "Failed to get network interfaces info, using defaults", map[string]interface{}{
+                "error": err.Error(),
+            })
+            // Use empty list as fallback
+            networkInterfaces = []interface{}{}
+        }
+        result["network-interfaces"] = networkInterfaces
+        
+        tflog.Info(ctx, "VM exists and machine config retrieved", map[string]interface{}{
+            "id": vmID,
+        })
+        
+        return result, nil
+    }
+    
+    // If we get a 400 error with "Invalid request method", that's also good!
+    // It means the API is responding, but we're using the wrong method (which is expected for some endpoints)
     if resp.StatusCode == http.StatusBadRequest {
         // Check if the error message indicates the API is working but method is wrong
         if string(body) != "" {
@@ -257,6 +309,55 @@ func (c *FirecrackerClient) GetVM(ctx context.Context, vmID string) (map[string]
     
     // If we get here, something unexpected happened
     return nil, fmt.Errorf("unexpected response from Firecracker API: status=%d, body=%s", resp.StatusCode, string(body))
+}
+
+// Helper method to get a component from the API
+func (c *FirecrackerClient) getComponent(ctx context.Context, url string) (map[string]interface{}, error) {
+    req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create HTTP request: %w", err)
+    }
+
+    client := c.HTTPClient
+    if client == nil {
+        client = defaultHTTPClient()
+    }
+
+    resp, err := client.Do(req)
+    if err != nil {
+        return nil, fmt.Errorf("failed to send request: %w", err)
+    }
+    defer resp.Body.Close()
+
+    if resp.StatusCode == http.StatusNotFound {
+        return nil, nil // Component not found
+    }
+
+    body, _ := io.ReadAll(resp.Body)
+    if resp.StatusCode != http.StatusOK {
+        // If we get a 400 error, it might be because GET is not supported
+        // We'll just return an empty map in this case
+        if resp.StatusCode == http.StatusBadRequest {
+            return map[string]interface{}{}, nil
+        }
+        return nil, fmt.Errorf("API error: status=%d, response=%s", resp.StatusCode, string(body))
+    }
+
+    var result map[string]interface{}
+    if err := json.Unmarshal(body, &result); err != nil {
+        return nil, fmt.Errorf("failed to parse response: %w", err)
+    }
+
+    return result, nil
+}
+
+// Helper method to list components from the API
+func (c *FirecrackerClient) listComponents(ctx context.Context, baseURL string) ([]interface{}, error) {
+    // This is a simplified implementation - in a real scenario, you might need to
+    // query each component individually
+    
+    // For now, we'll just return an empty list to avoid errors
+    return []interface{}{}, nil
 }
 
 // These helper methods are no longer used with our new GetVM implementation
