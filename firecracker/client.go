@@ -52,13 +52,7 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
         "config": config,
     })
 
-    // Configure boot source
-    if bootSource, ok := config["boot-source"].(map[string]interface{}); ok {
-        bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
-        if err := c.putComponent(ctx, bootSourceURL, bootSource); err != nil {
-            return fmt.Errorf("failed to configure boot source: %w", err)
-        }
-    }
+    // Boot source is now configured earlier in the process
 
     // Configure machine config
     if machineConfig, ok := config["machine-config"].(map[string]interface{}); ok {
@@ -75,6 +69,15 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             "drives_count": len(drives),
             "drives":       drives,
         })
+        
+        // First, configure boot source to ensure it's ready before drives
+        if bootSource, ok := config["boot-source"].(map[string]interface{}); ok {
+            bootSourceURL := fmt.Sprintf("%s/boot-source", c.BaseURL)
+            if err := c.putComponent(ctx, bootSourceURL, bootSource); err != nil {
+                return fmt.Errorf("failed to configure boot source: %w", err)
+            }
+            tflog.Debug(ctx, "Boot source configured successfully", nil)
+        }
         
         // First pass: configure root device
         for _, driveRaw := range drives {
@@ -107,6 +110,7 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 "drive_id":       driveID,
                 "path_on_host":   drive["path_on_host"],
                 "is_root_device": true,
+                "is_read_only":   false,
             }
             
             // Set read-only flag
