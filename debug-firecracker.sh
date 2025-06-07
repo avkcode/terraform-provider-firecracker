@@ -70,6 +70,6 @@ fi
 echo ""
 echo "Suggested Boot Arguments"
 echo "======================"
-echo "console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda rootfstype=ext4 rw"
+echo "console=ttyS0 reboot=k panic=1 pci=off root=/dev/vda1 rootfstype=ext4 rw"
 echo ""
 echo "Debug complete!"

@@ -128,6 +128,7 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 "path_on_host":   drive["path_on_host"],
                 "is_root_device": true,
                 "is_read_only":   false,
+                "rate_limiter":   map[string]interface{}{},
             }
             
             // Set read-only flag

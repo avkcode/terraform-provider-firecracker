@@ -173,8 +173,8 @@ func resourceFirecrackerVMCreate(ctx context.Context, d *schema.ResourceData, m 
     re := regexp.MustCompile(`root=\S+`)
     bootArgs = re.ReplaceAllString(bootArgs, "")
     
-    // Add root=/dev/vda with explicit rootfstype
-    bootArgs = strings.TrimSpace(bootArgs) + " root=/dev/vda rootfstype=ext4 rw"
+    // Add root=/dev/vda1 with explicit rootfstype
+    bootArgs = strings.TrimSpace(bootArgs) + " root=/dev/vda1 rootfstype=ext4 rw"
     
     // Ensure we have rootfstype if not already present
     if !strings.Contains(bootArgs, "rootfstype=") {
