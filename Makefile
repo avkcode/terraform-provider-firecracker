@@ -9,6 +9,7 @@ help:
 	@echo "  run                - Build, initialize, and apply the Terraform configuration"
 	@echo "  test               - Run a basic API test against Firecracker"
 	@echo "  verify             - Run all verification checks (dependencies, terraform, files)"
+	@echo "  destroy            - Destroy all Terraform-managed resources"
 	@echo ""
 	@echo "Advanced testing:"
 	@echo "  test-remote-exec   - Create a test configuration using remote-exec provisioner"
@@ -316,6 +317,16 @@ setup-network:
 verify: check-deps check-terraform check-files
 	@echo "✅ All verification checks passed."
 
+# Add a destroy target to remove Terraform resources
+destroy: check-terraform
+	@echo "Destroying Terraform resources..."
+	@if [ -d "test/.terraform" ]; then \
+		terraform -chdir=test destroy -auto-approve || { echo "❌ Terraform destroy failed"; exit 1; }; \
+		echo "✅ Terraform resources destroyed successfully."; \
+	else \
+		echo "⚠️  No Terraform state found in test directory."; \
+	fi
+
 # Add a prepare-ssh-image target to create a VM image with SSH enabled
 prepare-ssh-image: check-files
 	@echo "Preparing VM image with SSH enabled..."
@@ -343,4 +354,4 @@ prepare-ssh-image: check-files
 	@echo ""
 	@echo "⚠️ Note: This is a manual process and requires root privileges."
 
-.PHONY: help build run test start-socat stop-socat clean clean-test start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status test-remote-exec setup-network prepare-ssh-image verify
+.PHONY: help build run test start-socat stop-socat clean clean-test start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status test-remote-exec setup-network prepare-ssh-image verify destroy
