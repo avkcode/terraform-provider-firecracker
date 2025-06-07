@@ -107,8 +107,6 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
                 "drive_id":       driveID,
                 "path_on_host":   drive["path_on_host"],
                 "is_root_device": true,
-                // Add partuuid for root device
-                "partuuid":       "0eaa91a0-01",
             }
             
             // Set read-only flag
@@ -198,8 +196,6 @@ func (c *FirecrackerClient) CreateVM(ctx context.Context, config map[string]inte
             if apiDriveConfig["is_root_device"].(bool) {
                 // Set the drive ID to "rootfs" for the root device to ensure consistent naming
                 apiDriveConfig["drive_id"] = "rootfs"
-                // Add partuuid for non-root device configuration as well for consistency
-                apiDriveConfig["partuuid"] = "0eaa91a0-01"
             }
             
             // Enhanced debugging for each drive
