@@ -8,6 +8,7 @@ help:
 	@echo "  build              - Build the provider and install it locally"
 	@echo "  run                - Build, initialize, and apply the Terraform configuration"
 	@echo "  test               - Run a basic API test against Firecracker"
+	@echo "  verify             - Run all verification checks (dependencies, terraform, files)"
 	@echo ""
 	@echo "Advanced testing:"
 	@echo "  test-remote-exec   - Create a test configuration using remote-exec provisioner"
@@ -119,8 +120,8 @@ check-deps: check-terraform
 	fi
 	@echo "✅ All dependencies are installed."
 
-# Fix the build target to create directories if they don't exist
-build: check-deps
+# Update the build target to not check dependencies every time
+build:
 	@echo "Building provider..."
 	@if command -v go &> /dev/null; then \
 		go build -o terraform-provider-firecracker; \
@@ -138,7 +139,7 @@ clean-test:
 	@rm -f test/remote-exec-template.tf
 	@echo "✅ Test directory cleaned."
 
-# Add dependency tracking to run target
+# Update the run target to not check dependencies
 run: build check-terraform check-files clean-test
 	@echo "Setting up environment..."
 	@$(MAKE) setup || { echo "❌ Environment setup failed"; exit 1; }
@@ -273,6 +274,10 @@ setup-network:
 		echo "⚠️ tap0 interface already exists"; \
 	fi
 
+# Add a verify target that runs all checks
+verify: check-deps check-terraform check-files
+	@echo "✅ All verification checks passed."
+
 # Add a prepare-ssh-image target to create a VM image with SSH enabled
 prepare-ssh-image: check-files
 	@echo "Preparing VM image with SSH enabled..."
@@ -300,4 +305,4 @@ prepare-ssh-image: check-files
 	@echo ""
 	@echo "⚠️ Note: This is a manual process and requires root privileges."
 
-.PHONY: help build run test start-socat stop-socat clean clean-test start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status test-remote-exec setup-network prepare-ssh-image
+.PHONY: help build run test start-socat stop-socat clean clean-test start-firecracker stop-firecracker setup teardown check-terraform check-files check-deps status test-remote-exec setup-network prepare-ssh-image verify
