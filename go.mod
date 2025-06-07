@@ -2,7 +2,11 @@ module github.com/avkcode/terraform-provider-firecracker
 
 go 1.22.2
 
-require github.com/hashicorp/terraform-plugin-sdk/v2 v2.36.1
+require (
+	github.com/google/uuid v1.6.0
+	github.com/hashicorp/terraform-plugin-log v0.9.0
+	github.com/hashicorp/terraform-plugin-sdk/v2 v2.36.1
+)
 
 require (
 	github.com/agext/levenshtein v1.2.2 // indirect
