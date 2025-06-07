@@ -1,11 +1,8 @@
 package firecracker
 
 import (
-    "bytes"
     "context"
-    "encoding/json"
     "fmt"
-    "net/http"
     "regexp"
     "time"
 
